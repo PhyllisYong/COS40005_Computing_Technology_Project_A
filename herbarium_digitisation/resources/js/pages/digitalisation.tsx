@@ -1,0 +1,365 @@
+import React, { useState, useRef } from "react";
+import styled, { keyframes } from "styled-components";
+import Sidebar from "@/components/app-sidebar";
+
+const pulse = keyframes`
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+`;
+
+const PageContainer = styled.div`
+  display: flex;
+  background: #f3f4f6;
+  min-height: 100vh;
+`;
+
+const MainContent = styled.main`
+  margin-left: 16rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow-y: auto;
+`;
+
+const ContentWrapper = styled.div`
+  max-width: 80rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 2.5rem 2.5rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+`;
+
+const Header = styled.header`
+  padding: 1.5rem 0 2rem 0;
+
+  h1 {
+    font-size: 1.875rem;
+    font-weight: 800;
+    color: #4a6741;
+    margin: 0;
+  }
+
+  p {
+    color: #9ca3af;
+    font-size: 0.75rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-top: 0.25rem;
+  }
+`;
+
+const LayoutGrid = styled.div`
+  display: flex;
+  gap: 2rem;
+  flex: 1;
+  min-height: 0;
+  padding-bottom: 2rem;
+`;
+
+const GlassCard = styled.div`
+  background: white;
+  border-radius: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  border: 1px solid #f3f4f6;
+  display: flex;
+  flex-direction: column;
+`;
+
+const LeftColumn = styled(GlassCard)`
+  flex: 1;
+  padding: 2rem;
+`;
+
+const RightColumn = styled(GlassCard)`
+  flex: 1.2;
+  padding: 1.5rem;
+`;
+
+const SectionTitle = styled.h2`
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+`;
+
+const DropzoneLabel = styled.label`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed #e5e7eb;
+  border-radius: 1.5rem;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #f9fafb;
+    border-color: #4a6741;
+  }
+
+  span.icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+
+  span.text {
+    color: #9ca3af;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+`;
+
+const ThumbnailRow = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin: 1rem 0 1.5rem 0;
+`;
+
+const ThumbBox = styled.div<{ $isActive:boolean }>`
+  width: 3.5rem;
+  height: 3.5rem;
+  background: #f9f9f7;
+  border-radius: 0.75rem;
+  border: 2px solid ${props => props.$isActive ? "#4a6741" : "transparent"};
+  cursor: pointer;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: ${props => props.$isActive ? "#4a6741" : "#d1d5db"};
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`;
+
+const ThumbNumber = styled.span`
+  font-size: 10px;
+  font-weight: 800;
+  color: #d1d5db;
+`;
+
+const PreviewContainer = styled.div`
+  flex: 1;
+  position: relative;
+  background: #fdfcf9;
+  border-radius: 1rem;
+  border: 1px solid #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+`;
+
+const PreviewImage = styled.img`
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+`;
+
+const EmptyPreviewText = styled.span`
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #eee;
+  text-transform: uppercase;
+`;
+
+const ImageLabel = styled.div`
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  background: #f8f5f0;
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  border: 1px solid #eee;
+  font-size: 9px;
+  font-weight: 800;
+  color: #666;
+  text-transform: uppercase;
+`;
+
+const ValidationBadge = styled.div`
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  background: white;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #f3f4f6;
+  box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+  min-width: 150px;
+`;
+
+const ValidationTitle = styled.div`
+  font-size: 9px;
+  font-weight: 800;
+  color: #9ca3af;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid #f3f4f6;
+  padding-bottom: 0.2rem;
+`;
+
+const StatusText = styled.div`
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4b5563;
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    animation: ${pulse} 2s infinite;
+  }
+
+  .highlight {
+    color: #059669;
+    margin-left: auto;
+  }
+`;
+
+const NextButton = styled.button`
+  width: 100%;
+  background: #5d7356;
+  color: white;
+  padding: 1.1rem;
+  border-radius: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.75rem;
+  border: none;
+  cursor: pointer;
+
+  &:hover {
+    background: #4a6741;
+  }
+`;
+
+export default function Digitalisation() {
+
+  const [images,setImages] = useState<(string|null)[]>([null,null,null,null]);
+  const [activeIndex,setActiveIndex] = useState(0);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (event:React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if(!file) 
+      return;
+
+    const imageUrl = URL.createObjectURL(file);
+
+    const newImages = [...images];
+    newImages[activeIndex] = imageUrl;
+
+    setImages(newImages);
+  };
+
+  return (
+    <PageContainer>
+      <Sidebar/>
+      <MainContent>
+        <ContentWrapper>
+
+          <Header>
+            <h1>Plant Digitalisation</h1>
+            <p>Upload a specimen image</p>
+          </Header>
+
+          <LayoutGrid>
+            <LeftColumn>
+              <DropzoneLabel>
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  ref={fileInputRef}
+                />
+
+                <span className="icon">📸</span>
+                <span className="text">Click to upload field photo</span>
+              </DropzoneLabel>
+            </LeftColumn>
+
+            <RightColumn>
+              <SectionTitle>
+                Single or Multiple Image
+              </SectionTitle>
+
+              <ThumbnailRow>
+                {images.map((img,i)=>(
+                  <ThumbBox
+                    key={i}
+                    $isActive={activeIndex===i}
+                    onClick={()=>setActiveIndex(i)}
+                  >
+
+                    {img
+                      ? <img src={img} alt="Specimen"/>
+                      : <ThumbNumber>{i+1}</ThumbNumber>
+                    }
+
+                  </ThumbBox>
+                ))}
+              </ThumbnailRow>
+
+              <PreviewContainer>
+                {images[activeIndex] ? (
+                  <>
+                    <PreviewImage src={images[activeIndex]!}/>
+                    <ImageLabel>
+                      IMAGE {activeIndex+1}
+                    </ImageLabel>
+                  </>
+                ):(
+                  <EmptyPreviewText>
+                    Image {activeIndex+1}
+                  </EmptyPreviewText>
+                )}
+
+                <ValidationBadge>
+                  <ValidationTitle>
+                    Validation
+                  </ValidationTitle>
+
+                  <StatusText>
+                    <span className="dot"/>
+                    Quality:
+                    <span className="highlight">Clear</span>
+                  </StatusText>
+                </ValidationBadge>
+              </PreviewContainer>
+
+              <NextButton>
+                Next Step
+              </NextButton>
+
+            </RightColumn>
+          </LayoutGrid>
+        </ContentWrapper>
+      </MainContent>
+    </PageContainer>
+  );
+}

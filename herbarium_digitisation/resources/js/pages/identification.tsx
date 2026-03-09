@@ -190,6 +190,7 @@ const ResultMainRow = styled.div`
   cursor: pointer;
 `;
 
+
 const ToggleIcon = styled.div<{ $isExpanded: boolean }>`
   color: #9ca3af;
   transition: transform 0.3s ease;
@@ -343,10 +344,46 @@ const DonutSegment = styled.circle`
   }
 `;
 
+const LoadingSkeleton = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 10px;
+`;
+
+const SkeletonCard = styled.div`
+  height: 70px;
+  border-radius: 10px;
+  background: linear-gradient(
+    90deg,
+    #f3f4f6 25%,
+    #e5e7eb 37%,
+    #f3f4f6 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+
+  @keyframes shimmer {
+    0% { background-position: 100% 0 }
+    100% { background-position: -100% 0 }
+  }
+`;
+
 export default function Identification() {
+
+  //Prediction type
+  type Prediction = {
+    name: string;
+    score: number;
+  };
+
   // Image upload
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Loading Effect
+  const [loading, setLoading] = useState(false);
+  // Prediction 
+  const [predictions, setPredictions] = useState<Prediction[]>([]);
 
   // Raw image / GradCAM
   const [activeTab, setActiveTab] = useState<'raw' | 'gradcam'>('raw');
@@ -366,13 +403,7 @@ export default function Identification() {
     percent: number;
   } | null>(null);
 
-  const results = [
-    { name: 'Monstera Deliciosa', score: 98 },
-    { name: 'Philodendron Hope', score: 85 },
-    { name: 'Epipremnum Aureum', score: 72 },
-    { name: 'Thaumatophyllum Sp.', score: 45 },
-    { name: 'Anthurium Regale', score: 30 },
-  ];
+
 
   const chartConfig = [
     { percent: 50, color: '#4a6741' },
@@ -385,6 +416,44 @@ export default function Identification() {
   const radius = 75;
   const circumference = 2 * Math.PI * radius;
   let currentOffset = 0;
+
+
+  //fucntion
+
+  async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImageUrl(URL.createObjectURL(file));
+    setLoading(true);
+    setPredictions([]);
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const token = document
+      .querySelector('meta[name="csrf-token"]')
+      ?.getAttribute("content");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/api/identify", {
+        method: "POST",
+        headers: {
+          "X-CSRF-TOKEN": token || "",
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      console.log("API response", data);
+
+      setPredictions(data.predictions || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <PageContainer>
@@ -408,11 +477,11 @@ export default function Identification() {
               </TabContainer>
 
               <Dropzone $canClick={activeTab === 'raw'} onClick={() => activeTab === 'raw' && fileInputRef.current?.click()}>
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  hidden 
-                  onChange={(e) => e.target.files?.[0] && setImageUrl(URL.createObjectURL(e.target.files[0]))} 
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  hidden
+                  onChange={handleFileSelect}
                 />
                 {!imageUrl ? (
                   <EmptyStateText>
@@ -431,7 +500,7 @@ export default function Identification() {
               <div style={{ position: 'relative', width: '11rem', height: '11rem', flexShrink: 0 }}>
                 <svg viewBox="0 0 176 176" style={{ transform: 'rotate(-90deg)' }}>
                   <circle cx="88" cy="88" r={radius} stroke="#f0f0e8" strokeWidth="18" fill="transparent" />
-                  
+
                   {chartConfig.map((segment, index) => {
                     const strokeDasharray = (segment.percent / 100) * circumference;
                     const dashOffset = currentOffset;
@@ -449,22 +518,22 @@ export default function Identification() {
                         strokeDasharray={`${strokeDasharray} ${circumference}`}
                         strokeDashoffset={dashOffset}
                         strokeLinecap="butt"
-                        onMouseEnter={() => setHoveredData({ name: results[index].name, percent: segment.percent })}
+                        onMouseEnter={() => setHoveredData({ name: predictions[index].name, percent: segment.percent })}
                         onMouseLeave={() => setHoveredData(null)}
                       />
                     );
                   })}
                 </svg>
-                <div style={{ 
-                  position: 'absolute', 
-                  inset: 0, 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center', 
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   textAlign: 'center',
                   padding: '1.5rem',
-                  pointerEvents: 'none' 
+                  pointerEvents: 'none'
                 }}>
                   {hoveredData ? (
                     <>
@@ -480,10 +549,10 @@ export default function Identification() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
                 <h3 style={{ fontSize: '0.75rem', fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Top 5 Species Distribution</h3>
                 <LegendContainer>
-                  {results.slice(0, 5).map((res, idx) => (
+                  {predictions.slice(0, 5).map((res, idx) => (
                     <LegendItem key={idx}>
                       <Dot color={chartConfig[idx].color} />
-                      <span style={{flex: 1, overflow: 'hidden', textOverflow: 'ellipsis'}}>{res.name}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.name}</span>
                     </LegendItem>
                   ))}
                 </LegendContainer>
@@ -491,14 +560,33 @@ export default function Identification() {
             </Card>
           </LeftColumn>
 
+          
           <ResultsList>
-            {results.map((res, i) => (
+
+            {/* STATE 1: No image */}
+            {!imageUrl && (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#9ca3af' }}>
+                Upload an image to start identification
+              </div>
+            )}
+
+            {/* STATE 2: Loading */}
+            {imageUrl && loading && (
+              <LoadingSkeleton>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </LoadingSkeleton>
+            )}
+
+            {/* STATE 3: Results */}
+            {!loading && predictions.map((res, i) => (
               <ResultCardContainer key={i}>
                 <ResultMainRow onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}>
                   <ToggleIcon $isExpanded={expandedIndex === i}>
                     <ChevronRight size={20} />
                   </ToggleIcon>
-                  
+
                   <SpeciesInfo>
                     <h4>Species Name & Similarity</h4>
                     <p>{res.name}</p>
@@ -509,21 +597,34 @@ export default function Identification() {
                 </ResultMainRow>
 
                 <ExpandedDetails $isExpanded={expandedIndex === i}>
-                  <h5 style={{fontSize: '9px', textTransform: 'uppercase', color: '#9ca3af', margin: '0 0 5px 0'}}>Similar References</h5>
+                  <h5 style={{
+                    fontSize: '9px',
+                    textTransform: 'uppercase',
+                    color: '#9ca3af',
+                    margin: '0 0 5px 0'
+                  }}>
+                    Similar References
+                  </h5>
+
                   <ReferenceGrid>
                     {[1, 2, 3].map((refId) => (
-                      <RefSquare key={refId} onClick={(e) => { 
-                        e.stopPropagation(); 
-                        setSelectedRef({ species: res.name, id: refId });
-                      }}>
+                      <RefSquare
+                        key={refId}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRef({ species: res.name, id: refId });
+                        }}
+                      >
                         <ImageIcon size={18} className="base-icon" />
                         <Maximize2 size={16} className="hover-icon" />
                       </RefSquare>
                     ))}
                   </ReferenceGrid>
+
                 </ExpandedDetails>
               </ResultCardContainer>
             ))}
+
           </ResultsList>
         </ContentGrid>
 

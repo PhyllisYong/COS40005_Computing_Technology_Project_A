@@ -1,4 +1,5 @@
 import React, { useState, useRef } from "react";
+import { router } from "@inertiajs/react";
 import styled, { keyframes } from "styled-components";
 import Sidebar from "@/components/app-sidebar";
 
@@ -251,29 +252,88 @@ const NextButton = styled.button`
   border: none;
   cursor: pointer;
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: #4a6741;
   }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+`;
+
+const RunNameInput = styled.input`
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.6rem;
+  border: 1.5px solid #e5e7eb;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  outline: none;
+  margin-bottom: 0.75rem;
+  box-sizing: border-box;
+
+  &::placeholder { color: #d1d5db; }
+  &:focus { border-color: #4a6741; }
+`;
+
+const StatusBanner = styled.div<{ $type: 'success' | 'error' }>`
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: ${p => p.$type === 'success' ? '#065f46' : '#991b1b'};
+  background: ${p => p.$type === 'success' ? '#d1fae5' : '#fee2e2'};
 `;
 
 export default function Digitalisation() {
 
-  const [images,setImages] = useState<(string|null)[]>([null,null,null,null]);
-  const [activeIndex,setActiveIndex] = useState(0);
+  const [images, setImages] = useState<(string | null)[]>([null, null, null, null]);
+  const [files,  setFiles]  = useState<(File | null)[]>([null, null, null, null]);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [runName, setRunName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (event:React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if(!file) 
-      return;
-
+    if (!file) return;
     const imageUrl = URL.createObjectURL(file);
+    setImages(prev => { const n = [...prev]; n[activeIndex] = imageUrl; return n; });
+    setFiles(prev  => { const n = [...prev]; n[activeIndex] = file;     return n; });
+  };
 
-    const newImages = [...images];
-    newImages[activeIndex] = imageUrl;
-
-    setImages(newImages);
+  const handleSubmit = () => {
+    const uploadFiles = files.filter((f): f is File => f !== null);
+    if (uploadFiles.length === 0) {
+      setStatusMsg({ type: 'error', text: 'Please upload at least one image.' });
+      return;
+    }
+    const name = runName.trim() || `Run ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;
+    const data = new FormData();
+    data.append('run_name', name);
+    uploadFiles.forEach(f => data.append('files[]', f));
+    setSubmitting(true);
+    setStatusMsg(null);
+    router.post('/digitalisation', data, {
+      forceFormData: true,
+      onSuccess: () => {
+        setStatusMsg({ type: 'success', text: `Job "${name}" submitted successfully.` });
+        setImages([null, null, null, null]);
+        setFiles([null, null, null, null]);
+        setRunName('');
+        setActiveIndex(0);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      },
+      onError: (errors) => {
+        setStatusMsg({ type: 'error', text: Object.values(errors).join(' ') });
+      },
+      onFinish: () => setSubmitting(false),
+    });
   };
 
   return (
@@ -352,9 +412,21 @@ export default function Digitalisation() {
                 </ValidationBadge>
               </PreviewContainer>
 
-              <NextButton>
-                Next Step
+              <RunNameInput
+                type="text"
+                placeholder="Run name (optional)"
+                value={runName}
+                onChange={e => setRunName(e.target.value)}
+                disabled={submitting}
+              />
+
+              <NextButton onClick={handleSubmit} disabled={submitting}>
+                {submitting ? 'Submitting…' : 'Next Step'}
               </NextButton>
+
+              {statusMsg && (
+                <StatusBanner $type={statusMsg.type}>{statusMsg.text}</StatusBanner>
+              )}
 
             </RightColumn>
           </LayoutGrid>

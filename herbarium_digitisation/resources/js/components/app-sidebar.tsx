@@ -135,7 +135,7 @@ const Info = styled.div`
   }
 `;
 
-export default function Sidebar () {
+export function AppSidebar () {
   const { url } = usePage();
   
   const fullName = sessionStorage.getItem("loggedUserName") || "Admin";

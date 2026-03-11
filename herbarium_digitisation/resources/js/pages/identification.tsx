@@ -1,7 +1,8 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import styled from "styled-components";
-import Sidebar from '@/components/app-sidebar';
+import { AppSidebar } from '@/components/app-sidebar';
 import { ChevronRight, Image as ImageIcon, X, Maximize2 } from "lucide-react";
+import { heatmap } from "@/actions/App/Http/Controllers/PredictController";
 
 const PageContainer = styled.div`
   display: flex;
@@ -138,22 +139,13 @@ const ImageWrapper = styled.div`
   align-items: center;
 `;
 
-const PreviewImage = styled.img<{ $isGradcam: boolean }>`
+const PreviewImage = styled.img`
   max-height: 100%;
   max-width: 100%;
   object-fit: contain;
   border-radius: 0.5rem;
   transition: filter 0.3s ease;
-  filter: ${props => props.$isGradcam ? 'saturate(200%) contrast(125%) brightness(110%)' : 'none'};
-`;
-
-const GradcamOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top right, rgba(37, 99, 235, 0.25), rgba(250, 204, 21, 0.35), rgba(220, 38, 38, 0.45));
-  mix-blend-mode: overlay;
-  pointer-events: none;
-  border-radius: 0.5rem;
+  
 `;
 
 const ResultsList = styled.div`
@@ -369,6 +361,27 @@ const SkeletonCard = styled.div`
   }
 `;
 
+const ImageSkeleton = styled.div`
+  width: 100%;
+  height: 100%;
+  border-radius: 0.5rem;
+
+  background: linear-gradient(
+    90deg,
+    #f3f4f6 25%,
+    #e5e7eb 37%,
+    #f3f4f6 63%
+  );
+  background-size: 400% 100%;
+
+  animation: shimmer 1.4s ease infinite;
+
+  @keyframes shimmer {
+    0% { background-position: 100% 0 }
+    100% { background-position: -100% 0 }
+  }
+`;
+
 export default function Identification() {
 
   //Prediction type
@@ -379,9 +392,15 @@ export default function Identification() {
 
   // Image upload
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [heatmapUrl, setHeatmapUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
+
   // Loading Effect
-  const [loading, setLoading] = useState(false);
+  const [predictionloading, setPredictionLoading] = useState(false);
+  const [imageloading, setImageLoading] = useState(false);
+
   // Prediction 
   const [predictions, setPredictions] = useState<Prediction[]>([]);
 
@@ -418,14 +437,16 @@ export default function Identification() {
   let currentOffset = 0;
 
 
-  //fucntion
-
+  //Fucntion
+  // Handle file upload
   async function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setImageUrl(URL.createObjectURL(file));
-    setLoading(true);
+    setCurrentFile(file);
+    setHeatmapUrl(null); //reset previous heatmap 
+    setPredictionLoading(true);
     setPredictions([]);
 
     const formData = new FormData();
@@ -436,28 +457,73 @@ export default function Identification() {
       ?.getAttribute("content");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/identify", {
+      const response = await fetch("/api/identify", {
         method: "POST",
-        headers: {
-          "X-CSRF-TOKEN": token || "",
-        },
+        headers: { "X-CSRF-TOKEN": token || "" },
         body: formData,
+        credentials: "include",
       });
 
       const data = await response.json();
-      console.log("API response", data);
-
       setPredictions(data.predictions || []);
+
+      // If Grad-CAM tab is active, fetch the heatmap immediately
+      if (activeTab === "gradcam") {
+        fetchHeatmap(file);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Identify API error:", err);
     } finally {
-      setLoading(false);
+      setPredictionLoading(false);
     }
   }
 
+  // Fetch heatmap
+  async function fetchHeatmap(file: File) {
+    try {
+      setImageLoading(true);
+
+      const token = document
+        .querySelector('meta[name="csrf-token"]')
+        ?.getAttribute("content");
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/heatmap", {
+        method: "POST",
+        headers: { "X-CSRF-TOKEN": token || "" },
+        body: formData,
+        credentials: "include",
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const data = await response.json();
+      setHeatmapUrl(data.heatmap);
+    } catch (err) {
+      console.error("Heatmap API error:", err);
+    } finally {
+      setImageLoading(false);
+    }
+  }
+
+  // Handle tab change
+  useEffect(() => {
+    if (
+      activeTab === "gradcam" &&
+      !heatmapUrl &&
+      currentFile
+    ) {
+      setImageLoading(true);
+      fetchHeatmap(currentFile);
+    }
+  }, [activeTab]);
+
+
   return (
     <PageContainer>
-      <Sidebar />
+      <AppSidebar />
       <MainContent>
         <Header>
           <h1>Species Identification</h1>
@@ -489,8 +555,15 @@ export default function Identification() {
                   </EmptyStateText>
                 ) : (
                   <ImageWrapper>
-                    <PreviewImage src={imageUrl} $isGradcam={activeTab === 'gradcam'} />
-                    {activeTab === 'gradcam' && <GradcamOverlay />}
+
+                    {imageloading && <ImageSkeleton />}
+
+                    <PreviewImage
+                      src={activeTab === "gradcam" ? heatmapUrl ?? imageUrl : imageUrl}
+                      onLoad={() => setImageLoading(false)}
+                      style={{ display: imageloading ? "none" : "block" }}
+                    />
+
                   </ImageWrapper>
                 )}
               </Dropzone>
@@ -560,7 +633,7 @@ export default function Identification() {
             </Card>
           </LeftColumn>
 
-          
+
           <ResultsList>
 
             {/* STATE 1: No image */}
@@ -571,8 +644,10 @@ export default function Identification() {
             )}
 
             {/* STATE 2: Loading */}
-            {imageUrl && loading && (
+            {imageUrl && predictionloading && (
               <LoadingSkeleton>
+                <SkeletonCard />
+                <SkeletonCard />
                 <SkeletonCard />
                 <SkeletonCard />
                 <SkeletonCard />
@@ -580,7 +655,7 @@ export default function Identification() {
             )}
 
             {/* STATE 3: Results */}
-            {!loading && predictions.map((res, i) => (
+            {!predictionloading && predictions.map((res, i) => (
               <ResultCardContainer key={i}>
                 <ResultMainRow onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}>
                   <ToggleIcon $isExpanded={expandedIndex === i}>

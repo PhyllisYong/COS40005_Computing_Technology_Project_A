@@ -41,7 +41,28 @@ class PredictController extends Controller
         return response()->json([
             'predictions' => $formatted
         ]);
-
     }
     
+    public function heatmap(Request $request)
+    {
+        if (!$request->hasFile('file')) {
+            return response()->json(['error' => 'No file uploaded'], 400);
+        }
+
+        $file = $request->file('file');
+
+        $response = Http::attach(
+            'file',
+            file_get_contents($file->getRealPath()),
+            $file->getClientOriginalName()
+        )->post('http://127.0.0.1:8001/heatmap');
+
+        if (!$response->successful()) {
+            return response()->json(['error' => 'Heatmap generation failed'], 500);
+        }
+
+        return response()->json([
+            'heatmap' => $response->json()['heatmap']
+        ]);
+    }
 }

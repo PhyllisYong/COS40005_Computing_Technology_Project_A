@@ -382,12 +382,19 @@ const ImageSkeleton = styled.div`
   }
 `;
 
+const RefImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`;
+
 export default function Identification() {
 
   //Prediction type
   type Prediction = {
     name: string;
     score: number;
+    refs: string[];
   };
 
   // Image upload
@@ -414,6 +421,7 @@ export default function Identification() {
   const [selectedRef, setSelectedRef] = useState<{
     species: string;
     id: number;
+    url: string;
   } | null>(null);
 
   // Donut chart 
@@ -465,7 +473,12 @@ export default function Identification() {
       });
 
       const data = await response.json();
-      setPredictions(data.predictions || []);
+      const formatted = (data.predictions || []).map((p: any) => ({
+        name: p.name,
+        score: p.score,
+        refs: getRefs(p.classid)
+      }));
+      setPredictions(formatted);
 
       // If Grad-CAM tab is active, fetch the heatmap immediately
       if (activeTab === "gradcam") {
@@ -519,6 +532,14 @@ export default function Identification() {
       fetchHeatmap(currentFile);
     }
   }, [activeTab]);
+
+  function getRefs(classId: number) {
+    return [
+      `/sample/${classId}/1.jpg`,
+      `/sample/${classId}/2.jpg`,
+      `/sample/${classId}/3.jpg`
+    ];
+  }
 
 
   return (
@@ -694,15 +715,12 @@ export default function Identification() {
                   </h5>
 
                   <ReferenceGrid>
-                    {[1, 2, 3].map((refId) => (
-                      <RefSquare
-                        key={refId}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedRef({ species: res.name, id: refId });
-                        }}
-                      >
-                        <ImageIcon size={18} className="base-icon" />
+                    {res.refs.map((url, refIdx) => (
+                      <RefSquare key={refIdx} onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedRef({ species: res.name, id: refIdx + 1, url: url });
+                      }}>
+                        <RefImage src={url} alt={`Reference ${refIdx}`} />
                         <Maximize2 size={16} className="hover-icon" />
                       </RefSquare>
                     ))}
@@ -720,7 +738,15 @@ export default function Identification() {
             <ModalContent onClick={(e) => e.stopPropagation()}>
               <ModalClose onClick={() => setSelectedRef(null)}><X size={20} /></ModalClose>
               <div style={{ width: '100%', height: '280px', background: '#f9f9f7', borderRadius: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', border: '1px solid #f3f4f6' }}>
-                <ImageIcon size={64} color="#cbd5e1" />
+                <img
+                  src={selectedRef.url}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    borderRadius: "1rem"
+                  }}
+                />
               </div>
               <h2 style={{ color: '#4a6741', fontStyle: 'italic', margin: '0 0 0.5rem 0', fontSize: '1.5rem' }}>{selectedRef.species}</h2>
               <p style={{ color: '#9ca3af', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>

@@ -82,7 +82,8 @@ def topk_species_predictions(image_path, model, preprocess, class_text_features,
             "species": species_info.get('species', "Unknown Species"),
             "confidence": round(conf, 4),
             "Frequency_Bin": species_info.get('Frequency_Bin', 'Unknown'),
-            "category": species_info.get('Category', 'Unknown')
+            "category": species_info.get('Category', 'Unknown'),
+            "class_index": species_info.get('ClassIndex', None), #for sample images
         })
 
     return results

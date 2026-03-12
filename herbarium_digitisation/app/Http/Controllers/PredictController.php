@@ -34,7 +34,8 @@ class PredictController extends Controller
         $formatted = collect($aiResults)->map(function ($item) {
             return [
                 'name' => $item['species'],
-                'score' => round($item['confidence'] * 100, 2)
+                'score' => round($item['confidence'] * 100, 2),
+                'classid' =>$item['class_index'] #for sample images, just solely the number 
             ];
         });
 

@@ -58,6 +58,42 @@ class ResultProcessingService
         return count($records);
     }
 
+    /**
+     * Persist measurement records that arrived inline in the final callback JSON.
+     *
+     * The microservice sends results_data as a list of dicts with keys matching
+     * _MEAS_FIELDS in runner.py.  'conversion_factor_applied' maps to the DB
+     * column 'conversion_factor'.
+     *
+     * @param  array<int, array<string, mixed>>  $resultsData
+     * @return int  number of rows written
+     */
+    public function saveMeasurementsFromJson(ExtractJob $job, array $resultsData): int
+    {
+        if (empty($resultsData)) {
+            return 0;
+        }
+
+        $now  = Carbon::now()->toDateTimeString();
+        $rows = array_map(function (array $record) use ($job, $now) {
+            return array_merge($this->mapJsonRecord($record), [
+                'job_id'     => $job->getKey(),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }, $resultsData);
+
+        PlantMeasurement::where('job_id', $job->getKey())->delete();
+        foreach (array_chunk($rows, 500) as $chunk) {
+            PlantMeasurement::insert($chunk);
+        }
+
+        $job->results_imported_at = now();
+        $job->saveQuietly();
+
+        return count($resultsData);
+    }
+
     // ─── Private helpers ──────────────────────────────────────────────────────
 
     private function downloadCsvContents(ExtractJob $job): string
@@ -138,6 +174,34 @@ class ResultProcessingService
         }
 
         return $records;
+    }
+
+    /**
+     * Map a single results_data record (from the microservice JSON callback)
+     * to the plant_measurements column set.
+     *
+     * Note: the microservice key 'conversion_factor_applied' maps to the DB
+     * column 'conversion_factor'.
+     */
+    private function mapJsonRecord(array $record): array
+    {
+        $num = fn(string $key) => isset($record[$key]) && is_numeric($record[$key])
+            ? (float) $record[$key]
+            : null;
+
+        return [
+            'component_name'      => $record['component_name']  ?? null,
+            'component_type'      => $record['component_type']  ?? null,
+            'perimeter'           => $num('perimeter'),
+            'area'                => $num('area'),
+            'bbox_min_long_side'  => $num('bbox_min_long_side'),
+            'bbox_min_short_side' => $num('bbox_min_short_side'),
+            'units'               => $num('units'),
+            'conversion_factor'   => $num('conversion_factor_applied'),
+            'aspect_ratio'        => isset($record['aspect_ratio'])
+                                        ? (string) $record['aspect_ratio']
+                                        : null,
+        ];
     }
 
     /**

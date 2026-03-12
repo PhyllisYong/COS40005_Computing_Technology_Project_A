@@ -5,14 +5,17 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\ExtractJob;
 use App\Services\DigitisationJobStateService;
+use App\Services\ResultProcessingService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class DigitisationJobCallbackController extends Controller
 {
-    public function __construct(private readonly DigitisationJobStateService $stateService)
-    {
+    public function __construct(
+        private readonly DigitisationJobStateService $stateService,
+        private readonly ResultProcessingService $resultService,
+    ) {
     }
 
     /**
@@ -28,12 +31,14 @@ class DigitisationJobCallbackController extends Controller
     public function status(string $jobId, Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'status'        => ['required', 'string'],
-            'progress_step' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'result_files'  => ['sometimes', 'nullable', 'array'],
-            'result_files.*'=> ['string'],
-            'output_path'   => ['sometimes', 'nullable', 'string'],
-            'error_message' => ['sometimes', 'nullable', 'string'],
+            'status'         => ['required', 'string'],
+            'progress_step'  => ['sometimes', 'nullable', 'string', 'max:255'],
+            'result_files'   => ['sometimes', 'nullable', 'array'],
+            'result_files.*' => ['string'],
+            'output_path'    => ['sometimes', 'nullable', 'string'],
+            'error_message'  => ['sometimes', 'nullable', 'string'],
+            'results_data'   => ['sometimes', 'nullable', 'array'],
+            'results_data.*' => ['array'],
         ]);
 
         $job = ExtractJob::where('external_job_id', $jobId)->first();
@@ -56,12 +61,29 @@ class DigitisationJobCallbackController extends Controller
         }
 
         $this->stateService->transition($job, $internalStatus, [
-            'progress_step'  => $validated['progress_step'] ?? null,
-            'result_files'   => $validated['result_files']  ?? null,
-            'output_path'    => $validated['output_path']   ?? null,
-            'error_message'  => $validated['error_message'] ?? null,
+            'progress_step'    => $validated['progress_step'] ?? null,
+            'result_files'     => $validated['result_files']  ?? null,
+            'output_path'      => $validated['output_path']   ?? null,
+            'error_message'    => $validated['error_message'] ?? null,
             'callback_payload' => $request->all(),
         ]);
+
+        // When the job completes and the microservice included inline measurement
+        // records, persist them directly — no secondary CSV download needed.
+        if ($internalStatus === 'completed' && !empty($validated['results_data'])) {
+            try {
+                $count = $this->resultService->saveMeasurementsFromJson($job, $validated['results_data']);
+                Log::info('DigitisationJobCallbackController: saved measurements from callback', [
+                    'job_id' => $job->external_job_id,
+                    'count'  => $count,
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('DigitisationJobCallbackController: failed to save measurements', [
+                    'job_id' => $job->external_job_id,
+                    'error'  => $e->getMessage(),
+                ]);
+            }
+        }
 
         return response()->json(['message' => 'OK'], 200);
     }

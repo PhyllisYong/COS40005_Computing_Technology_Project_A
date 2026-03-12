@@ -5,11 +5,12 @@ import open_clip
 import pandas as pd
 from .inference import get_metadata_map
 
-MODEL_PATH = "./best_bioclip_last_trans.pt"
+MODEL_PATH = "./models/best_bioclip_last_trans.pt"
+TEXT_FEATURES_PATH = "./models/class_text_features.pt"
 MODEL_NAME = "hf-hub:imageomics/bioclip-2"
-SPECIES_CSV = "./species_label_plantclef2021.csv"
-CLASS_METADATA_CSV = "./species_classification.csv"
-TEXT_FEATURES_PATH = "./class_text_features.pt"
+SPECIES_CSV = "./data/species_label_plantclef2021.csv"
+CLASS_METADATA_CSV = "./data/species_classification.csv"
+
 if torch.cuda.is_available():
     device = torch.device("cuda")
     print(f" GPU Detected: {torch.cuda.get_device_name(0)}")

@@ -9,11 +9,6 @@ This is the repository for Group 12 of COS40005, Computing Technology Project A,
 ---
 
 # Leaf Measurement Microservice
-## Prerequisites:
-- Python 3.11 installed
-- NVIDIA GPU with drivers installed (for GPU support)
-- CUDA 12.1 toolkit (optional but recommended for best performance)
-
 ### 1. Clone the forked & modified LeafMachine2 repo: 
 ```
 git clone https://github.com/DamianCWQ/LeafMachine2.git

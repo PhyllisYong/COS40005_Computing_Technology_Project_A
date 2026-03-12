@@ -568,69 +568,81 @@ export default function Identification() {
                 )}
               </Dropzone>
             </Card>
+            {imageUrl && (
+              <Card $height="33%" $center>
 
-            <Card $height="33%" $center>
-              <div style={{ position: 'relative', width: '11rem', height: '11rem', flexShrink: 0 }}>
-                <svg viewBox="0 0 176 176" style={{ transform: 'rotate(-90deg)' }}>
-                  <circle cx="88" cy="88" r={radius} stroke="#f0f0e8" strokeWidth="18" fill="transparent" />
+                {/* STATE 1: Loading */}
+                {predictionloading && <ImageSkeleton />}
 
-                  {chartConfig.map((segment, index) => {
-                    const strokeDasharray = (segment.percent / 100) * circumference;
-                    const dashOffset = currentOffset;
-                    currentOffset -= strokeDasharray;
+                {/* STATE 2: Results */}
+                {!predictionloading && predictions.length > 0 && (
+                  <>
+                    <div style={{ position: 'relative', width: '11rem', height: '11rem', flexShrink: 0 }}>
+                      <svg viewBox="0 0 176 176" style={{ transform: 'rotate(-90deg)' }}>
+                        <circle cx="88" cy="88" r={radius} stroke="#f0f0e8" strokeWidth="18" fill="transparent" />
 
-                    return (
-                      <DonutSegment
-                        key={index}
-                        cx="88"
-                        cy="88"
-                        r={radius}
-                        stroke={segment.color}
-                        strokeWidth="18"
-                        fill="transparent"
-                        strokeDasharray={`${strokeDasharray} ${circumference}`}
-                        strokeDashoffset={dashOffset}
-                        strokeLinecap="butt"
-                        onMouseEnter={() => setHoveredData({ name: predictions[index].name, percent: segment.percent })}
-                        onMouseLeave={() => setHoveredData(null)}
-                      />
-                    );
-                  })}
-                </svg>
-                <div style={{
-                  position: 'absolute',
-                  inset: 0,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  textAlign: 'center',
-                  padding: '1.5rem',
-                  pointerEvents: 'none'
-                }}>
-                  {hoveredData ? (
-                    <>
-                      <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#4a6741' }}>{hoveredData.percent}%</span>
-                      <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginTop: '2px' }}>{hoveredData.name}</span>
-                    </>
-                  ) : (
-                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Distribution</span>
-                  )}
-                </div>
-              </div>
+                        {chartConfig.map((segment, index) => {
+                          const strokeDasharray = (segment.percent / 100) * circumference;
+                          const dashOffset = currentOffset;
+                          currentOffset -= strokeDasharray;
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
-                <h3 style={{ fontSize: '0.75rem', fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Top 5 Species Distribution</h3>
-                <LegendContainer>
-                  {predictions.slice(0, 5).map((res, idx) => (
-                    <LegendItem key={idx}>
-                      <Dot color={chartConfig[idx].color} />
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.name}</span>
-                    </LegendItem>
-                  ))}
-                </LegendContainer>
-              </div>
-            </Card>
+                          return (
+                            <DonutSegment
+                              key={index}
+                              cx="88"
+                              cy="88"
+                              r={radius}
+                              stroke={segment.color}
+                              strokeWidth="18"
+                              fill="transparent"
+                              strokeDasharray={`${strokeDasharray} ${circumference}`}
+                              strokeDashoffset={dashOffset}
+                              strokeLinecap="butt"
+                              onMouseEnter={() => setHoveredData({ name: predictions[index].name, percent: segment.percent })}
+                              onMouseLeave={() => setHoveredData(null)}
+                            />
+                          );
+                        })}
+                      </svg>
+                      <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        padding: '1.5rem',
+                        pointerEvents: 'none'
+                      }}>
+                        {hoveredData ? (
+                          <>
+                            <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#4a6741' }}>{hoveredData.percent}%</span>
+                            <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginTop: '2px' }}>{hoveredData.name}</span>
+                          </>
+                        ) : (
+                          <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Distribution</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', flex: 1 }}>
+                      <h3 style={{ fontSize: '0.75rem', fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', marginBottom: '0.25rem' }}>Top 5 Species Distribution</h3>
+                      <LegendContainer>
+                        {predictions.slice(0, 5).map((res, idx) => (
+                          <LegendItem key={idx}>
+                            <Dot color={chartConfig[idx].color} />
+                            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{res.name}</span>
+                          </LegendItem>
+                        ))}
+                      </LegendContainer>
+                    </div>
+
+                  </>
+                )}
+
+              </Card>
+            )}
           </LeftColumn>
 
 

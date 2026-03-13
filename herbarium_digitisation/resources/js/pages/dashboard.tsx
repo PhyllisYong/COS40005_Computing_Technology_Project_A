@@ -35,12 +35,12 @@
 //     );
 // }
 
-import Sidebar from '@/components/app-sidebar'; 
+import {AppSidebar} from '@/components/app-sidebar'; 
 
 export default function Dashboard() {
     return (
         <div style={{ display: 'flex' }}>
-            <Sidebar /> {/* This puts your sidebar on the screen */}
+            <AppSidebar /> {/* This puts your sidebar on the screen */}
             
             <main style={{ marginLeft: '16rem', padding: '2rem' }}>
                 <h1>Herbarium Digitalization Project</h1>

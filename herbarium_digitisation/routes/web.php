@@ -10,6 +10,7 @@ Route::inertia('/', 'dashboard')->name('dashboard');
 Route::inertia('/identification', 'identification')->name('identification');
 Route::inertia('/digitalisation1', 'digitalisation1')->name('digitalisation1');
 
+<<<<<<< Updated upstream
 
 // identification service route
 Route::post('/api/identify', [PredictController::class, 'identify']);
@@ -31,4 +32,8 @@ Route::get('/api/digitisation/{job}/results/json', [DigitisationResultController
 Route::post('/api/digitisation/{job}/results', [DigitisationResultController::class, 'store'])
     ->name('digitisation.results.store');
 
+=======
+Route::inertia('/register', 'auth/register')->name('register');
+Route::inertia('/login', 'auth/login')->name('login');
+>>>>>>> Stashed changes
 require __DIR__.'/settings.php';

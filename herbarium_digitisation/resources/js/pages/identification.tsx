@@ -204,7 +204,7 @@ const ScoreText = styled.span`
 `;
 
 const ExpandedDetails = styled.div<{ $isExpanded: boolean }>`
-  max-height: ${props => props.$isExpanded ? '180px' : '0'};
+  max-height: ${props => props.$isExpanded ? '200px' : '0'};
   opacity: ${props => props.$isExpanded ? '1' : '0'};
   padding: ${props => props.$isExpanded ? '0 1rem 1.25rem 2.85rem' : '0 1rem 0 2.85rem'};
   transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
@@ -226,19 +226,22 @@ const RefSquare = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #cbd5e1;
+  overflow: hidden; /* Important for the images */
   cursor: pointer;
   position: relative;
   transition: all 0.2s ease;
 
   &:hover {
     border-color: #a3b18a;
-    color: #4a6741;
-    background: #f0f4ee;
   }
 
   .hover-icon {
     position: absolute;
+    z-index: 2;
+    color: white;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px;
+    border-radius: 6px;
     opacity: 0;
     transition: opacity 0.2s;
   }
@@ -246,6 +249,12 @@ const RefSquare = styled.div`
   &:hover .hover-icon {
     opacity: 1;
   }
+`;
+
+const RefImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 `;
 
 const ProgressBar = styled.div<{ $width: number }>`
@@ -390,6 +399,7 @@ const RefImage = styled.img`
 `;
 
 export default function Identification() {
+<<<<<<< Updated upstream
 
   //Prediction type
   type Prediction = {
@@ -399,9 +409,12 @@ export default function Identification() {
   };
 
   // Image upload
+=======
+>>>>>>> Stashed changes
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [heatmapUrl, setHeatmapUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+<<<<<<< Updated upstream
 
   const [currentFile, setCurrentFile] = useState<File | null>(null);
 
@@ -413,25 +426,31 @@ export default function Identification() {
   const [predictions, setPredictions] = useState<Prediction[]>([]);
 
   // Raw image / GradCAM
+=======
+>>>>>>> Stashed changes
   const [activeTab, setActiveTab] = useState<'raw' | 'gradcam'>('raw');
-
-  // Result card expansion 
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
-
-  // Modal popup 
   const [selectedRef, setSelectedRef] = useState<{
     species: string;
     id: number;
     url: string;
   } | null>(null);
-
-  // Donut chart 
   const [hoveredData, setHoveredData] = useState<{
     name: string;
     percent: number;
   } | null>(null);
 
+<<<<<<< Updated upstream
 
+=======
+  const results = [
+    { name: 'Monstera Deliciosa', score: 98, refs: ['https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=150', 'https://images.unsplash.com/photo-1599202860130-f600f4948364?w=150', 'https://images.unsplash.com/photo-1617173944883-6ffbd35d584d?w=150'] },
+    { name: 'Philodendron Hope', score: 85, refs: ['https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=150', 'https://images.unsplash.com/photo-1599202860130-f600f4948364?w=150', 'https://images.unsplash.com/photo-1617173944883-6ffbd35d584d?w=150'] },
+    { name: 'Epipremnum Aureum', score: 72, refs: ['https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=150', 'https://images.unsplash.com/photo-1599202860130-f600f4948364?w=150', 'https://images.unsplash.com/photo-1617173944883-6ffbd35d584d?w=150'] },
+    { name: 'Thaumatophyllum Sp.', score: 45, refs: ['https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=150', 'https://images.unsplash.com/photo-1599202860130-f600f4948364?w=150', 'https://images.unsplash.com/photo-1617173944883-6ffbd35d584d?w=150'] },
+    { name: 'Anthurium Regale', score: 30, refs: ['https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=150', 'https://images.unsplash.com/photo-1599202860130-f600f4948364?w=150', 'https://images.unsplash.com/photo-1617173944883-6ffbd35d584d?w=150'] },
+  ];
+>>>>>>> Stashed changes
 
   const chartConfig = [
     { percent: 50, color: '#4a6741' },
@@ -593,6 +612,7 @@ export default function Identification() {
             {imageUrl && (
               <Card $height="33%" $center>
 
+<<<<<<< Updated upstream
                 {/* STATE 1: Loading */}
                 {predictionloading && <ImageSkeleton />}
 
@@ -602,6 +622,43 @@ export default function Identification() {
                     <div style={{ position: 'relative', width: '11rem', height: '11rem', flexShrink: 0 }}>
                       <svg viewBox="0 0 176 176" style={{ transform: 'rotate(-90deg)' }}>
                         <circle cx="88" cy="88" r={radius} stroke="#f0f0e8" strokeWidth="18" fill="transparent" />
+=======
+            <Card $height="33%" $center>
+              <div style={{ position: 'relative', width: '11rem', height: '11rem', flexShrink: 0 }}>
+                <svg viewBox="0 0 176 176" style={{ transform: 'rotate(-90deg)' }}>
+                  <circle cx="88" cy="88" r={radius} stroke="#f0f0e8" strokeWidth="18" fill="transparent" />
+                  {chartConfig.map((segment, index) => {
+                    const strokeDasharray = (segment.percent / 100) * circumference;
+                    const dashOffset = currentOffset;
+                    currentOffset -= strokeDasharray;
+                    return (
+                      <DonutSegment
+                        key={index}
+                        cx="88" cy="88" r={radius}
+                        stroke={segment.color}
+                        strokeWidth="18"
+                        fill="none"
+                        strokeDasharray={`${strokeDasharray} ${circumference}`}
+                        strokeDashoffset={dashOffset}
+                        strokeLinecap="butt"
+                        onMouseMove={() => setHoveredData({ name: results[index].name, percent: segment.percent })}
+                        onMouseLeave={() => setHoveredData(null)}
+                      />
+                    );
+                  })}
+                </svg>
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '1.5rem', pointerEvents: 'none' }}>
+                  {hoveredData ? (
+                    <>
+                      <span style={{ fontSize: '1.25rem', fontWeight: 800, color: '#4a6741' }}>{hoveredData.percent}%</span>
+                      <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', marginTop: '2px' }}>{hoveredData.name}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase' }}>Distribution</span>
+                  )}
+                </div>
+              </div>
+>>>>>>> Stashed changes
 
                         {chartConfig.map((segment, index) => {
                           const strokeDasharray = (segment.percent / 100) * circumference;
@@ -695,13 +752,15 @@ export default function Identification() {
                   <ToggleIcon $isExpanded={expandedIndex === i}>
                     <ChevronRight size={20} />
                   </ToggleIcon>
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
                   <SpeciesInfo>
                     <h4>Species Name & Similarity</h4>
                     <p>{res.name}</p>
                     <ProgressBar $width={res.score}><div /></ProgressBar>
                   </SpeciesInfo>
-
                   <ScoreText>{res.score}%</ScoreText>
                 </ResultMainRow>
 
@@ -717,8 +776,13 @@ export default function Identification() {
 
                   <ReferenceGrid>
                     {res.refs.map((url, refIdx) => (
+<<<<<<< Updated upstream
                       <RefSquare key={refIdx} onClick={(e) => {
                         e.stopPropagation();
+=======
+                      <RefSquare key={refIdx} onClick={(e) => { 
+                        e.stopPropagation(); 
+>>>>>>> Stashed changes
                         setSelectedRef({ species: res.name, id: refIdx + 1, url: url });
                       }}>
                         <RefImage src={url} alt={`Reference ${refIdx}`} />
@@ -738,6 +802,7 @@ export default function Identification() {
           <ModalOverlay onClick={() => setSelectedRef(null)}>
             <ModalContent onClick={(e) => e.stopPropagation()}>
               <ModalClose onClick={() => setSelectedRef(null)}><X size={20} /></ModalClose>
+<<<<<<< Updated upstream
               <div style={{ width: '100%', height: '280px', background: '#f9f9f7', borderRadius: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem', border: '1px solid #f3f4f6' }}>
                 <img
                   src={selectedRef.url}
@@ -748,6 +813,10 @@ export default function Identification() {
                     borderRadius: "1rem"
                   }}
                 />
+=======
+              <div style={{ width: '100%', height: '280px', background: '#f9f9f7', borderRadius: '1.5rem', overflow: 'hidden', marginBottom: '1.5rem', border: '1px solid #f3f4f6' }}>
+                <img src={selectedRef.url} alt="Selected reference" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+>>>>>>> Stashed changes
               </div>
               <h2 style={{ color: '#4a6741', fontStyle: 'italic', margin: '0 0 0.5rem 0', fontSize: '1.5rem' }}>{selectedRef.species}</h2>
               <p style={{ color: '#9ca3af', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.05em' }}>

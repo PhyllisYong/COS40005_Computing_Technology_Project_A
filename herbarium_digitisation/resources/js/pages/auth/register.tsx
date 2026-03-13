@@ -1,114 +1,154 @@
-import { Form, Head } from '@inertiajs/react';
-import InputError from '@/components/input-error';
-import TextLink from '@/components/text-link';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Spinner } from '@/components/ui/spinner';
-import AuthLayout from '@/layouts/auth-layout';
-import { login } from '@/routes';
-import { store } from '@/routes/register';
+import React from "react";
+import styled, { createGlobalStyle } from "styled-components";
+
+const MainContent = styled.div`
+  body { 
+    margin: 0; 
+    background-color: #f7f7f7; 
+    font-family: 'Segoe UI', Tahoma, sans-serif; 
+  }
+`;
+
+const AuthContainer = styled.div`
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  min-height: 100vh;
+  padding: 1.5rem;
+`;
+
+const RegisterCard = styled.div`
+  max-width: 480px; 
+  width: 100%; 
+  background: white; 
+  border-radius: 1.5rem;
+  padding: 3rem 2rem; 
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.03); 
+  border: 1px solid #eee;
+`;
+
+const Header = styled.div`
+  text-align: center; 
+  margin-bottom: 2rem;
+  h1 { 
+    color: #4a6741; 
+    font-size: 1.75rem; 
+    font-weight: 700; 
+    margin: 0 0 0.5rem 0; 
+  }
+  p { 
+    color: #888; 
+    font-size: 0.85rem; 
+    line-height: 1.4; 
+    margin: 0; 
+  }
+`;
+
+const Form = styled.form` 
+  display: flex; 
+  flex-direction: column; 
+  gap: 1.25rem; 
+`;
+
+const FormGroup = styled.div` 
+  display: flex; 
+  flex-direction: column; 
+  gap: 0.4rem; 
+`;
+
+const Label = styled.label` 
+  font-size: 0.65rem; 
+  font-weight: 800; 
+  color: #a0aab4; 
+  text-transform: uppercase; 
+  letter-spacing: 0.05em; 
+`;
+
+const Input = styled.input`
+  width: 100%; 
+  padding: 0.9rem 1.1rem; 
+  background: #f9f9f9; 
+  border: none; 
+  border-radius: 0.75rem;
+  font-size: 0.9rem; 
+  color: #333; 
+  box-sizing: border-box;
+  &::placeholder { 
+    color: #ccc;
+  }
+  &:focus { 
+    outline: 2px solid #4a67411a; 
+    background: #f5f5f5; 
+  }
+`;
+
+const SubmitButton = styled.button`
+  width: 100%; 
+  padding: 1rem; 
+  background: #556b43; 
+  color: white; 
+  font-weight: 700; 
+  border: none; 
+  border-radius: 0.75rem; 
+  cursor: pointer; 
+  margin-top: 0.5rem;
+  box-shadow: 0 4px 10px rgba(85, 107, 67, 0.2); 
+  transition: all 0.2s;
+  &:hover { 
+    background: #445635; 
+  }
+`;
+
+const SwitchText = styled.p`
+  text-align: center; 
+  margin-top: 2rem; 
+  color: #777; 
+  font-size: 0.8rem;
+  a { 
+    color: #4a6741; 
+    font-weight: 700; 
+    text-decoration: none; 
+    &:hover { 
+      text-decoration: underline; 
+    } 
+  }
+`;
 
 export default function Register() {
-    return (
-        <AuthLayout
-            title="Create an account"
-            description="Enter your details below to create your account"
-        >
-            <Head title="Register" />
-            <Form
-                {...store.form()}
-                resetOnSuccess={['password', 'password_confirmation']}
-                disableWhileProcessing
-                className="flex flex-col gap-6"
-            >
-                {({ processing, errors }) => (
-                    <>
-                        <div className="grid gap-6">
-                            <div className="grid gap-2">
-                                <Label htmlFor="name">Name</Label>
-                                <Input
-                                    id="name"
-                                    type="text"
-                                    required
-                                    autoFocus
-                                    tabIndex={1}
-                                    autoComplete="name"
-                                    name="name"
-                                    placeholder="Full name"
-                                />
-                                <InputError
-                                    message={errors.name}
-                                    className="mt-2"
-                                />
-                            </div>
+  return (
+    <>
+      <MainContent />
+      <AuthContainer>
+        <RegisterCard>
+          <Header>
+            <h1>Create Account</h1>
+            <p>Join our community of specimen research</p>
+          </Header>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="email">Email address</Label>
-                                <Input
-                                    id="email"
-                                    type="email"
-                                    required
-                                    tabIndex={2}
-                                    autoComplete="email"
-                                    name="email"
-                                    placeholder="email@example.com"
-                                />
-                                <InputError message={errors.email} />
-                            </div>
+          <Form onSubmit={(e) => e.preventDefault()}>
+            <FormGroup>
+              <Label>Name</Label>
+              <Input type="text" placeholder="Full Name" required />
+            </FormGroup>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="password">Password</Label>
-                                <Input
-                                    id="password"
-                                    type="password"
-                                    required
-                                    tabIndex={3}
-                                    autoComplete="new-password"
-                                    name="password"
-                                    placeholder="Password"
-                                />
-                                <InputError message={errors.password} />
-                            </div>
+            <FormGroup>
+              <Label>Email Address</Label>
+              <Input type="email" placeholder="Email Address" required />
+            </FormGroup>
 
-                            <div className="grid gap-2">
-                                <Label htmlFor="password_confirmation">
-                                    Confirm password
-                                </Label>
-                                <Input
-                                    id="password_confirmation"
-                                    type="password"
-                                    required
-                                    tabIndex={4}
-                                    autoComplete="new-password"
-                                    name="password_confirmation"
-                                    placeholder="Confirm password"
-                                />
-                                <InputError
-                                    message={errors.password_confirmation}
-                                />
-                            </div>
+            <FormGroup>
+              <Label>Password</Label>
+              <Input type="password" placeholder="Password" required />
+            </FormGroup>
 
-                            <Button
-                                type="submit"
-                                className="mt-2 w-full"
-                                tabIndex={5}
-                                data-test="register-user-button"
-                            >
-                                {processing && <Spinner />}
-                                Create account
-                            </Button>
-                        </div>
+            <SubmitButton type="submit">Register Now</SubmitButton>
+          </Form>
 
-                        <div className="text-center text-sm text-muted-foreground">
-                            Already have an account?{' '}
-                            <TextLink href={login()} tabIndex={6}>
-                                Log in
-                            </TextLink>
-                        </div>
-                    </>
-                )}
-            </Form>
-        </AuthLayout>
-    );
+          <SwitchText>
+            Already have account? <a href="/login">Log In Here</a>
+          </SwitchText>
+        </RegisterCard>
+      </AuthContainer>
+    </>
+  );
 }

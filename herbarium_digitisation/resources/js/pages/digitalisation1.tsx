@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 import styled, { keyframes } from "styled-components";
+<<<<<<< Updated upstream
 import {AppSidebar} from '@/components/app-sidebar'; 
+=======
+import {AppSidebar} from '@/components/app-sidebar';
+>>>>>>> Stashed changes
 
 const pulse = keyframes`
   0% { transform: scale(1); opacity: 1; }

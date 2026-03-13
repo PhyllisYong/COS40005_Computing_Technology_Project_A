@@ -330,6 +330,7 @@ const Dot = styled.span<{ color: string }>`
 const DonutSegment = styled.circle`
   cursor: pointer;
   transition: opacity 0.2s ease, stroke-width 0.2s ease;
+  pointer-events: visibleStroke;
   &:hover {
     stroke-width: 22;
     opacity: 0.8;
@@ -619,7 +620,7 @@ export default function Identification() {
                               strokeDasharray={`${strokeDasharray} ${circumference}`}
                               strokeDashoffset={dashOffset}
                               strokeLinecap="butt"
-                              onMouseEnter={() => setHoveredData({ name: predictions[index].name, percent: segment.percent })}
+                              onMouseMove={() => setHoveredData({ name: predictions[index].name, percent: segment.percent })}
                               onMouseLeave={() => setHoveredData(null)}
                             />
                           );

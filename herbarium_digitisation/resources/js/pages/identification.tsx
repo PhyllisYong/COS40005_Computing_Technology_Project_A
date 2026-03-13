@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import styled from "styled-components";
 import { AppSidebar } from '@/components/app-sidebar';
 import { ChevronRight, Image as ImageIcon, X, Maximize2 } from "lucide-react";
-import { heatmap } from "@/actions/App/Http/Controllers/PredictController";
+// import { heatmap } from "@/actions/App/Http/Controllers/PredictController";
 
 const PageContainer = styled.div`
   display: flex;

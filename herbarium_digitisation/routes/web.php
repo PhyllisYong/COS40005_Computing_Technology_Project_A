@@ -31,4 +31,6 @@ Route::get('/api/digitisation/{job}/results/json', [DigitisationResultController
 Route::post('/api/digitisation/{job}/results', [DigitisationResultController::class, 'store'])
     ->name('digitisation.results.store');
 
+Route::inertia('/register', 'auth/register')->name('register');
+Route::inertia('/login', 'auth/login')->name('login');
 require __DIR__.'/settings.php';

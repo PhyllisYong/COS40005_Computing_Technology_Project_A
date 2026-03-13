@@ -23,14 +23,6 @@ const MainContent = styled.main`
   box-sizing: border-box; /* Includes padding in width calculation */
 `;
 
-<<<<<<< Updated upstream
-import {AppSidebar} from '@/components/app-sidebar'; 
-
-export default function Dashboard() {
-    return (
-        <div style={{ display: 'flex' }}>
-            <AppSidebar /> {/* This puts your sidebar on the screen */}
-=======
 const AboutSection = styled.section`
   background: white;
   padding: 2.5rem;
@@ -192,7 +184,7 @@ const FooterLogoContainer = styled.div`
   }
 `;
 
-export default function Home() {
+export default function home() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = (direction: 'left' | 'right') => {
@@ -236,7 +228,6 @@ export default function Home() {
             <IconButton onClick={() => handleScroll('left')}>
               <ChevronLeft size={24} />
             </IconButton>
->>>>>>> Stashed changes
             
             <CarouselContainer ref={scrollRef}>
               <GalleryImage src="https://images.unsplash.com/photo-1545241047-6083a3684587?auto=format&fit=crop&w=600" />

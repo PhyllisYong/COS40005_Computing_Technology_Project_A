@@ -1,11 +1,7 @@
 import React, { useState, useRef } from "react";
 import { router } from "@inertiajs/react";
 import styled, { keyframes } from "styled-components";
-<<<<<<< Updated upstream
 import {AppSidebar} from '@/components/app-sidebar'; 
-=======
-import {AppSidebar} from "@/components/app-sidebar";
->>>>>>> Stashed changes
 
 const pulse = keyframes`
   0% { opacity: 1; }

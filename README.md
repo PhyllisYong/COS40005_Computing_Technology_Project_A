@@ -49,3 +49,38 @@ uv pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url ht
 ```
 uvicorn api.main:app --reload --port 9000
 ```
+
+---
+
+# Image Quality Check (IQC) Microservice
+
+The IQC service evaluates uploaded images before downstream processing.
+
+### 1. Go to the IQC service directory
+```
+cd herbarium_digitisation\services\image_quality_check
+```
+
+### 2. Create and activate a virtual environment
+```
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
+```
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Run the IQC service
+```
+uvicorn app.main:app --host 0.0.0.0 --port 9001 --reload
+```
+
+### 5. Laravel side requirements
+Run a queue worker for IQC dispatch:
+```
+cd herbarium_digitisation
+php artisan queue:work --queue=iqc,default
+```

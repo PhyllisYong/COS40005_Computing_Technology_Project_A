@@ -187,3 +187,4 @@ export default function Sidebar () {
     </SidebarContainer>
   );
 };
+export { Sidebar as AppSidebar };

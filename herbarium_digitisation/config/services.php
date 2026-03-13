@@ -35,4 +35,21 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | LeafMachine2 Microservice
+    |--------------------------------------------------------------------------
+    |
+    | Connection settings for the LeafMachine2 digitisation microservice.
+    | LM2_API_KEY is used when Laravel calls the microservice.
+    | LM2_CALLBACK_TOKEN is the bearer token the microservice must include
+    | when it calls back to Laravel's internal callback endpoint.
+    |
+    */
+    'leafmachine2' => [
+        'url'            => env('LM2_SERVICE_URL'),
+        'api_key'        => env('LM2_API_KEY'),
+        'callback_token' => env('LM2_CALLBACK_TOKEN'),
+    ],
+
 ];

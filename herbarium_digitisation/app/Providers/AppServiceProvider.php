@@ -2,9 +2,15 @@
 
 namespace App\Providers;
 
+use App\Models\ExtractJob;
+use App\Policies\DigitisationJobPolicy;
+use App\Services\DigitisationJobStateService;
+use App\Services\LeafMachine2Service;
+use App\Services\ResultProcessingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 
@@ -15,7 +21,16 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // LeafMachine2 HTTP client — singleton, cheap to reuse
+        $this->app->singleton(LeafMachine2Service::class);
+
+        // State service — stateless, singleton is safe
+        $this->app->singleton(DigitisationJobStateService::class);
+
+        // ResultProcessingService depends on LeafMachine2Service
+        $this->app->singleton(ResultProcessingService::class, function ($app) {
+            return new ResultProcessingService($app->make(LeafMachine2Service::class));
+        });
     }
 
     /**
@@ -24,6 +39,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        $this->registerPolicies();
     }
 
     /**
@@ -46,5 +62,10 @@ class AppServiceProvider extends ServiceProvider
                 ->uncompromised()
             : null,
         );
+    }
+
+    protected function registerPolicies(): void
+    {
+        Gate::policy(ExtractJob::class, DigitisationJobPolicy::class);
     }
 }

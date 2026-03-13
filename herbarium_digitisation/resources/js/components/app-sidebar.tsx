@@ -94,7 +94,7 @@ const NavLink = styled(Link)`
   svg { width: 1.1rem; height: 1.1rem; color: #4b5563; }
 `;
 
-const AccountBox = styled.div`
+const AccountBox = styled(Link)`
   padding: 0.75rem;
   display: flex;
   align-items: center;
@@ -135,7 +135,7 @@ const Info = styled.div`
   }
 `;
 
-export default function Sidebar () {
+export function AppSidebar () {
   const { url } = usePage();
   
   const fullName = sessionStorage.getItem("loggedUserName") || "Admin";
@@ -177,7 +177,7 @@ export default function Sidebar () {
         </NavLink>
       </Nav>
 
-      <AccountBox>
+      <AccountBox href="/register">
         <Avatar>{fullName.substring(0, 2).toUpperCase()}</Avatar>
         <Info>
           <p>{fullName}</p>
@@ -187,4 +187,3 @@ export default function Sidebar () {
     </SidebarContainer>
   );
 };
-export { Sidebar as AppSidebar };

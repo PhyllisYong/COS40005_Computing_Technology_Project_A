@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import styled, { keyframes } from "styled-components";
-import Sidebar from '@/components/app-sidebar';
+import {AppSidebar} from '@/components/app-sidebar'; 
 
 const pulse = keyframes`
   0% { transform: scale(1); opacity: 1; }
@@ -237,7 +237,7 @@ export default function PlantDetails() {
 
   return (
     <PageContainer>
-      <Sidebar />
+      <AppSidebar />
       
       <MainContent>
         <ContentWrapper>

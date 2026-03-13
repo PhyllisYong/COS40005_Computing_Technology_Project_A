@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { router } from "@inertiajs/react";
 import styled, { keyframes } from "styled-components";
-import Sidebar from "@/components/app-sidebar";
+import {AppSidebar} from '@/components/app-sidebar'; 
 
 const pulse = keyframes`
   0% { opacity: 1; }
@@ -338,7 +338,7 @@ export default function Digitalisation() {
 
   return (
     <PageContainer>
-      <Sidebar/>
+      <AppSidebar/>
       <MainContent>
         <ContentWrapper>
 

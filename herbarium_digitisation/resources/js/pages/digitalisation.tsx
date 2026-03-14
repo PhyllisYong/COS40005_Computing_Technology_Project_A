@@ -100,6 +100,7 @@ const DropzoneLabel = styled.label`
   background: white;
   cursor: pointer;
   transition: all 0.2s ease;
+  margin-bottom: 1.5rem;
 
   &:hover {
     background: #f9fafb;
@@ -122,6 +123,7 @@ const ThumbnailRow = styled.div`
   display: flex;
   gap: 1rem;
   margin: 1rem 0 1.5rem 0;
+  flex-wrap: wrap;
 `;
 
 const ThumbBox = styled.div<{ $isActive:boolean }>`
@@ -288,10 +290,48 @@ const StatusBanner = styled.div<{ $type: 'success' | 'error' }>`
   background: ${p => p.$type === 'success' ? '#d1fae5' : '#fee2e2'};
 `;
 
+const AddThumbButton = styled(ThumbBox)`
+  border: 2px dashed #d1d5db;
+  color: #9ca3af;
+  font-size: 1.5rem;
+  font-weight: 400;
+  &:hover { 
+    border-color: #4a6741; 
+    color: #4a6741; 
+  }
+`;
+
+const DeleteButton = styled.button`
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  background: white;
+  color: #666;
+  border: 1px solid #eee;
+  border-radius: 50%; /* Makes it a circle */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  transition: all 0.2s;
+
+  &:hover {
+    background: #fee2e2; /* Light red background on hover */
+    color: #991b1b;       /* Red 'X' on hover */
+    border-color: #fecaca;
+  }
+`;
+
 export default function Digitalisation() {
 
-  const [images, setImages] = useState<(string | null)[]>([null, null, null, null]);
-  const [files,  setFiles]  = useState<(File | null)[]>([null, null, null, null]);
+  const [images, setImages] = useState<(string | null)[]>([null]);
+  const [files,  setFiles]  = useState<(File | null)[]>([null]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [runName, setRunName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -305,6 +345,7 @@ export default function Digitalisation() {
     const imageUrl = URL.createObjectURL(file);
     setImages(prev => { const n = [...prev]; n[activeIndex] = imageUrl; return n; });
     setFiles(prev  => { const n = [...prev]; n[activeIndex] = file;     return n; });
+    setStatusMsg(null);
   };
 
   const handleSubmit = () => {
@@ -323,17 +364,40 @@ export default function Digitalisation() {
       forceFormData: true,
       onSuccess: () => {
         setStatusMsg({ type: 'success', text: `Job "${name}" submitted successfully.` });
-        setImages([null, null, null, null]);
-        setFiles([null, null, null, null]);
-        setRunName('');
-        setActiveIndex(0);
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        setTimeout(() => {
+            router.visit('/digitalisation1'); 
+        }, 1000);
       },
+      //   setImages([null, null, null, null]);
+      //   setFiles([null, null, null, null]);
+      //   setRunName('');
+      //   setActiveIndex(0);
+      //   if (fileInputRef.current) fileInputRef.current.value = '';
+      // },
       onError: (errors) => {
         setStatusMsg({ type: 'error', text: Object.values(errors).join(' ') });
       },
       onFinish: () => setSubmitting(false),
     });
+  };
+
+  const addImageSlot = () => {
+    setImages(prev => [...prev, null]);
+    setFiles(prev => [...prev, null]);
+    setActiveIndex(images.length); 
+  };
+
+  const removeImageSlot = (index: number) => {
+    if (images.length <= 1) {
+      setImages([null]);
+      setFiles([null]);
+      return;
+    }
+    const newImages = images.filter((_, i) => i !== index);
+    const newFiles = files.filter((_, i) => i !== index);
+    setImages(newImages);
+    setFiles(newFiles);
+    setActiveIndex(Math.max(0, index - 1));
   };
 
   return (
@@ -349,18 +413,32 @@ export default function Digitalisation() {
 
           <LayoutGrid>
             <LeftColumn>
-              <DropzoneLabel>
-                <input
-                  type="file"
-                  hidden
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  ref={fileInputRef}
-                />
+              <PreviewContainer>
+                {images[activeIndex] ? (
+                  <>
+                    <DeleteButton onClick={() => removeImageSlot(activeIndex)}>
+                      &times;
+                    </DeleteButton>
+                    
+                    <PreviewImage src={images[activeIndex]!} />
+                    <ImageLabel>IMAGE {activeIndex + 1}</ImageLabel>
+                  </>
+                ) : (
+                  <EmptyPreviewText>Image {activeIndex + 1}</EmptyPreviewText>
+                )}
 
-                <span className="icon">📸</span>
-                <span className="text">Click to upload field photo</span>
-              </DropzoneLabel>
+                <ValidationBadge>
+                  <ValidationTitle>
+                    Validation
+                  </ValidationTitle>
+
+                  <StatusText>
+                    <span className="dot"/>
+                    Quality:
+                    <span className="highlight">Clear</span>
+                  </StatusText>
+                </ValidationBadge>
+              </PreviewContainer>
             </LeftColumn>
 
             <RightColumn>
@@ -383,34 +461,24 @@ export default function Digitalisation() {
 
                   </ThumbBox>
                 ))}
+
+                <AddThumbButton $isActive={false} onClick={addImageSlot}>
+                  +
+                </AddThumbButton>
               </ThumbnailRow>
+              
+              <DropzoneLabel>
+                <input
+                  type="file"
+                  hidden
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  ref={fileInputRef}
+                />
 
-              <PreviewContainer>
-                {images[activeIndex] ? (
-                  <>
-                    <PreviewImage src={images[activeIndex]!}/>
-                    <ImageLabel>
-                      IMAGE {activeIndex+1}
-                    </ImageLabel>
-                  </>
-                ):(
-                  <EmptyPreviewText>
-                    Image {activeIndex+1}
-                  </EmptyPreviewText>
-                )}
-
-                <ValidationBadge>
-                  <ValidationTitle>
-                    Validation
-                  </ValidationTitle>
-
-                  <StatusText>
-                    <span className="dot"/>
-                    Quality:
-                    <span className="highlight">Clear</span>
-                  </StatusText>
-                </ValidationBadge>
-              </PreviewContainer>
+                <span className="icon">📸</span>
+                <span className="text">Click to upload field photo</span>
+              </DropzoneLabel>
 
               <RunNameInput
                 type="text"
@@ -420,7 +488,7 @@ export default function Digitalisation() {
                 disabled={submitting}
               />
 
-              <NextButton onClick={handleSubmit} disabled={submitting}>
+              <NextButton onClick={handleSubmit} disabled={submitting || statusMsg?.type === 'error'}>
                 {submitting ? 'Submitting…' : 'Next Step'}
               </NextButton>
 

@@ -407,7 +407,7 @@ export default function Digitalisation() {
         <ContentWrapper>
 
           <Header>
-            <h1>Plant Digitalisation</h1>
+            <h1>Plant Digitisation</h1>
             <p>Upload a specimen image</p>
           </Header>
 

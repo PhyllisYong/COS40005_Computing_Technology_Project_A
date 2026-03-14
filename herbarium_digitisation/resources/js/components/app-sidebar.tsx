@@ -187,4 +187,4 @@ export function AppSidebar () {
     </SidebarContainer>
   );
 };
-export { Sidebar as AppSidebar };
+

@@ -22,7 +22,7 @@ class InferencesFactory extends Factory
          return [
             'predicted_label' => PlantSpecies::inRandomOrder()->first()?->scientific_name,
 
-            'confidence_score' => $this->faker->randomFloat(4, 0.50, 0.99),
+            'confidence_score' => $this->faker->randomFloat(2, 50.00, 98.00),
 
             'user_id' => User::inRandomOrder()->first()?->user_id,
         ];

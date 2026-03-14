@@ -1,19 +1,24 @@
 
 # 1. HOW TO RUN
 
-## Frontend
-### go to herbarium/ directory, open two cmd screen
-Screen 1: php artisan serve  
-Screen 2: npm run dev 
+## AI Identification Microservice
 
-## Microservice
-### go to ai_service_identification/ directory
+### 1. Go to ai_service_identification/ directory  
+### 2. Create and activate virtual environment  
+```
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+### 3. Install main dependencies   
+```
+pip install -r requirements.txt
+```
+
+### 4. Run the microservice 
+```
 run: python -m uvicorn app.main:app --reload --port 8001
-
-
-p.s   
-I run Laravel on port 8000 and python on 8001.  
-Didn't manage to upload both .pt file cuz file size too large, so won't be able to run rn
+```
 
 # Initial Setup
 

@@ -6,8 +6,8 @@
 ### 1. Go to ai_service_identification/ directory  
 ### 2. Create and activate virtual environment  
 ```
-python -m venv .venv
-.venv\Scripts\activate
+python -m venv venv
+venv\Scripts\activate
 ```
 
 ### 3. Install main dependencies   
@@ -17,7 +17,7 @@ pip install -r requirements.txt
 
 ### 4. Run the microservice 
 ```
-run: python -m uvicorn app.main:app --reload --port 8001
+python -m uvicorn app.main:app --reload --port 8001
 ```
 
 # Initial Setup

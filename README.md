@@ -1,5 +1,10 @@
-
 # 1. HOW TO RUN
+## Initial Setup
+1. run 'composer install' to download all available dependencies for the backend
+2. run 'npm install' for all frontend dependencies such as React and other libraries
+3. run 'cp .env.example .env' to get a copy of the Laravel environment file
+3.1. check and edit configuration for database connection as well as ensure that XAMPP is running the local MySQL server
+4. generate an encryption key by running 'php artisan key:generate'
 
 ## AI Identification Microservice
 
@@ -19,10 +24,6 @@ pip install -r requirements.txt
 ```
 python -m uvicorn app.main:app --reload --port 8001
 ```
-
-# Initial Setup
-
-1. run 'composer install' to download all available dependencies
 
 ---
 
@@ -67,13 +68,6 @@ uv pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url ht
 ```
 uvicorn api.main:app --reload --port 9000
 ```
-1. run 'composer install' to download all available dependencies for the backend
-2. run 'npm install' for all frontend dependencies such as React and other libraries
-3. run 'cp .env.example .env' to get a copy of the Laravel environment file
-
-3.1. check and edit configuration for database connection as well as ensure that XAMPP is running the local MySQL server
-
-4. generate an encryption key by running 'php artisan key:generate'
 
 ## Database Setup
 

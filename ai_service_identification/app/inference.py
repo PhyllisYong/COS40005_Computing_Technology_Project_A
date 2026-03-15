@@ -36,9 +36,9 @@ def build_class_text_embeddings(model, class_names, device):
 
 ##updated inference code
 
-def topk_species_predictions(image_path, model, preprocess, class_text_features, unique_labels, meta_map, k=5, device="cpu"):
+def topk_species_predictions(image_path, model, preprocess, class_text_features, unique_labels, meta_map, k=5):
     model.eval()
-
+    device = next(model.parameters()).device
     # 1. Load and preprocess
     # raw_img = Image.open(image_path).convert("RGB")
     raw_img = image_path
@@ -49,7 +49,7 @@ def topk_species_predictions(image_path, model, preprocess, class_text_features,
         input_tensor = processed['pixel_values'].to(device)
     else:
         input_tensor = processed.unsqueeze(0).to(device)
-
+    class_text_features = class_text_features.to(device)
     # 2. Forward pass
     with torch.no_grad():
         # Encode image
@@ -89,12 +89,13 @@ def topk_species_predictions(image_path, model, preprocess, class_text_features,
     return results
 
 
-def generate_attention_heatmap(image_path, model, preprocess, device="cpu"):
+def generate_attention_heatmap(image_path, model, preprocess):
     """
     Generates an attention heatmap for a given image and model.
     Returns a Base64 string ready for HTML <img src="data:image/png;base64,...">.
     """
     model.eval()
+    device = next(model.parameters()).device
     attn_weights_all = []
 
     # Hook to capture attention weights

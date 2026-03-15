@@ -168,12 +168,12 @@ export function AppSidebar () {
 
         <NavLink href="/digitalisation" className={url === '/digitalisation' ? 'active' : ''}>
           <FileText size={18} />
-          Digitalisation
+          Digitisation
         </NavLink>
 
         <NavLink href="/digitalisation1" className={url === '/digitalisation1' ? 'active' : ''}>
           <FileText size={18} />
-          Digitalisation
+          Digitisation
         </NavLink>
       </Nav>
 

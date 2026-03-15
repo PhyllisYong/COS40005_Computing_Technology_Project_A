@@ -11,8 +11,9 @@ class LeafMachine2Service
     private string $baseUrl;
     private string $apiKey;
 
-    public function __construct()
-    {
+    public function __construct(
+        private readonly UploadStorageService $uploadStorage,
+    ) {
         $this->baseUrl = rtrim(config('services.leafmachine2.url'), '/');
         $this->apiKey  = config('services.leafmachine2.api_key');
     }
@@ -58,6 +59,60 @@ class LeafMachine2Service
         if (!$response->successful()) {
             throw new RuntimeException(
                 "LeafMachine2 job submission failed [{$response->status()}]: {$response->body()}"
+            );
+        }
+
+        return $response->json();
+    }
+
+    /**
+     * Submit images that are already stored on disk.
+     *
+     * @param  array<int, array{stored_path:string, original_filename:string}> $images
+     */
+    public function submitStoredImages(
+        string $jobId,
+        string $runName,
+        array $images,
+        array $configOverrides = []
+    ): array {
+        $request = Http::withHeader('X-API-Key', $this->apiKey)
+            ->timeout(30)
+            ->asMultipart();
+
+        $attachedCount = 0;
+
+        foreach ($images as $image) {
+            $absolutePath = $this->uploadStorage->absolutePath($image['stored_path']);
+
+            if (!file_exists($absolutePath)) {
+                throw new RuntimeException("LeafMachine2 submission file not found: {$absolutePath}");
+            }
+
+            $request = $request->attach(
+                'files',
+                fopen($absolutePath, 'rb'),
+                $image['original_filename']
+            );
+
+            $attachedCount++;
+        }
+
+        if ($attachedCount === 0) {
+            throw new RuntimeException('LeafMachine2 submission aborted: no files were attached.');
+        }
+
+        $payload = ['job_id' => $jobId, 'run_name' => $runName];
+
+        if (!empty($configOverrides)) {
+            $payload['config_overrides'] = json_encode($configOverrides);
+        }
+
+        $response = $request->post("{$this->baseUrl}/api/v1/jobs/upload", $payload);
+
+        if (!$response->successful()) {
+            throw new RuntimeException(
+                "LeafMachine2 stored-image submission failed [{$response->status()}]: {$response->body()}"
             );
         }
 

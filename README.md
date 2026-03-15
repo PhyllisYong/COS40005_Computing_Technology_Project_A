@@ -26,13 +26,13 @@ run: python -m uvicorn app.main:app --reload --port 8001
 
 ---
 
-# Leaf Measurement Microservice
+## Leaf Measurement Microservice
 ### 1. Clone the forked & modified LeafMachine2 repo: 
 ```
 git clone https://github.com/DamianCWQ/LeafMachine2.git
 ```
 
-### 2. Create and activate virtual environment
+### 2. In the LeafMachine2 repo, Create and activate virtual environment
 ```
 python -m venv .venv
 .venv\Scripts\Activate.ps1

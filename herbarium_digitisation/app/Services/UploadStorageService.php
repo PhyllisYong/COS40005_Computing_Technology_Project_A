@@ -26,15 +26,16 @@ class UploadStorageService
      *
      * @return array{stored_path:string,absolute_path:string,stored_filename:string}
      */
-    public function storeUploadedFile(UploadedFile $file, string $jobId): array
+    public function storeUploadedFile(UploadedFile $file, string $jobId, ?string $runName = null): array
     {
-        $jobDirectory = $this->jobDirectoryPath($jobId);
+        $directorySegment = $this->jobDirectorySegment($jobId, $runName);
+        $jobDirectory = $this->jobDirectoryPath($directorySegment);
         File::ensureDirectoryExists($jobDirectory);
 
         $storedFilename = (string) Str::uuid() . '_' . $this->sanitizeOriginalFilename($file->getClientOriginalName());
         $file->move($jobDirectory, $storedFilename);
 
-        $relativePath = $jobId . '/' . $storedFilename;
+        $relativePath = $directorySegment . '/' . $storedFilename;
 
         return [
             'stored_path' => $relativePath,
@@ -61,9 +62,17 @@ class UploadStorageService
         return File::exists($this->absolutePath($storedPath));
     }
 
-    private function jobDirectoryPath(string $jobId): string
+    private function jobDirectoryPath(string $directorySegment): string
     {
-        return $this->normalizeAbsolutePath($this->uploadsRoot . '/' . trim($jobId));
+        return $this->normalizeAbsolutePath($this->uploadsRoot . '/' . trim($directorySegment));
+    }
+
+    private function jobDirectorySegment(string $jobId, ?string $runName): string
+    {
+        $baseName = Str::slug((string) $runName, '_');
+        $baseName = $baseName !== '' ? Str::limit($baseName, 48, '') : 'run';
+
+        return $baseName . '_' . trim($jobId);
     }
 
     private function sanitizeOriginalFilename(string $filename): string

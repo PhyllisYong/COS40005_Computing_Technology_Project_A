@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import io
 import json
 import logging
@@ -35,6 +36,9 @@ ROTATION_BY_EXIF = {1: 0, 3: 180, 6: 270, 8: 90}
 API_KEY = os.getenv("IQC_API_KEY", "")
 CALLBACK_URL = os.getenv("IQC_CALLBACK_URL", "")
 CALLBACK_TOKEN = os.getenv("IQC_CALLBACK_TOKEN", "")
+CALLBACK_TIMEOUT_SECONDS = float(os.getenv("IQC_CALLBACK_TIMEOUT_SECONDS", "30"))
+CALLBACK_MAX_RETRIES = int(os.getenv("IQC_CALLBACK_MAX_RETRIES", "3"))
+CALLBACK_RETRY_DELAY_SECONDS = float(os.getenv("IQC_CALLBACK_RETRY_DELAY_SECONDS", "1.5"))
 
 SOFT_MIN_WIDTH = int(os.getenv("IQC_SOFT_MIN_WIDTH", "1800"))
 SOFT_MIN_HEIGHT = int(os.getenv("IQC_SOFT_MIN_HEIGHT", "1200"))
@@ -257,15 +261,48 @@ async def post_callback(job_id: str, payload: dict[str, Any]) -> None:
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.post(url, headers=headers, json=payload)
+    attempts = max(1, CALLBACK_MAX_RETRIES)
 
-    if response.is_success:
-        logger.info("Callback delivered for job_id=%s with status_code=%s", job_id, response.status_code)
-    else:
-        logger.error(
-            "Callback failed for job_id=%s with status_code=%s body=%s",
-            job_id,
-            response.status_code,
-            response.text,
-        )
+    for attempt in range(1, attempts + 1):
+        try:
+            async with httpx.AsyncClient(timeout=CALLBACK_TIMEOUT_SECONDS) as client:
+                response = await client.post(url, headers=headers, json=payload)
+        except httpx.TimeoutException as exc:
+            logger.warning(
+                "Callback timeout for job_id=%s attempt=%s/%s timeout=%ss error=%s",
+                job_id,
+                attempt,
+                attempts,
+                CALLBACK_TIMEOUT_SECONDS,
+                str(exc),
+            )
+        except httpx.RequestError as exc:
+            logger.warning(
+                "Callback request error for job_id=%s attempt=%s/%s error=%s",
+                job_id,
+                attempt,
+                attempts,
+                str(exc),
+            )
+        else:
+            if response.is_success:
+                logger.info("Callback delivered for job_id=%s with status_code=%s", job_id, response.status_code)
+                return
+
+            logger.error(
+                "Callback failed for job_id=%s attempt=%s/%s status_code=%s body=%s",
+                job_id,
+                attempt,
+                attempts,
+                response.status_code,
+                response.text,
+            )
+
+        if attempt < attempts:
+            await asyncio.sleep(max(0.0, CALLBACK_RETRY_DELAY_SECONDS))
+
+    logger.error(
+        "Callback permanently failed for job_id=%s after %s attempt(s)",
+        job_id,
+        attempts,
+    )

@@ -50,6 +50,12 @@ Optional thresholds:
 - `IQC_LAPLACIAN_THRESHOLD` (default `120`)
 - `IQC_BRISQUE_THRESHOLD` (default `40`)
 
+Optional callback reliability settings:
+
+- `IQC_CALLBACK_TIMEOUT_SECONDS` (default `30`)
+- `IQC_CALLBACK_MAX_RETRIES` (default `3`)
+- `IQC_CALLBACK_RETRY_DELAY_SECONDS` (default `1.5`)
+
 ## Run locally (Windows PowerShell)
 
 1. Move into this directory:

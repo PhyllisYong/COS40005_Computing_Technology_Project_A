@@ -9,7 +9,6 @@ use Illuminate\Support\Facades\Log;
 class ImageQualityCheckStateService
 {
     public function __construct(
-        private readonly LeafMachine2Service $lm2,
         private readonly UploadStorageService $uploadStorage,
     ) {
     }
@@ -75,6 +74,7 @@ class ImageQualityCheckStateService
 
         $acceptedImages = $job->images()
             ->where('accepted_for_submission', true)
+            ->where('iqc_decision', 'accept')
             ->get(['stored_path', 'original_filename'])
             ->map(fn($image) => [
                 'stored_path' => $image->stored_path,
@@ -98,6 +98,13 @@ class ImageQualityCheckStateService
         $rejectedCount = $job->images()->where('accepted_for_submission', false)->count();
         $acceptedCount = count($acceptedImages);
 
+        $rejectedNames = $job->images()
+            ->where('accepted_for_submission', false)
+            ->pluck('original_filename')
+            ->filter(fn($name) => is_string($name) && $name !== '')
+            ->values()
+            ->all();
+
         $job->update([
             'iqc_status' => 'completed',
             'iqc_completed_at' => now(),
@@ -112,38 +119,35 @@ class ImageQualityCheckStateService
                 'job_id' => $job->external_job_id,
             ]);
 
+            $rejectedList = $rejectedNames !== [] ? implode(', ', $rejectedNames) : 'all uploaded images';
+
             $job->update([
                 'status' => 'failed',
                 'success' => 'FAILED',
-                'error_message' => 'All uploaded images were rejected by quality checks. Please reupload clearer images.',
+                'error_message' => "Rejected images: {$rejectedList}. Please reupload clearer images.",
                 'failed_at' => now(),
             ]);
             return;
         }
 
-        Log::info('ImageQualityCheckStateService: submitting accepted images to LeafMachine2', [
-            'job_id' => $job->external_job_id,
-            'accepted_images' => $acceptedCount,
-            'rejected_images' => $rejectedCount,
-        ]);
-
-        $this->lm2->submitStoredImages(
-            $job->external_job_id,
-            $job->job_name ?? 'Digitisation Run',
-            $acceptedImages,
-            $job->config_overrides ?? []
-        );
+        $warningMessage = null;
+        if ($rejectedNames !== []) {
+            $warningMessage = 'Rejected images: ' . implode(', ', $rejectedNames) . '. Please reupload clearer images.';
+        }
 
         $job->update([
             'status' => 'accepted',
             'accepted_at' => now(),
+            'error_message' => $warningMessage,
             'progress_step' => $rejectedCount > 0
-                ? 'quality_check_partial_pass_submitted'
-                : 'quality_check_pass_submitted',
+                ? 'quality_check_partial_pass_waiting_submission'
+                : 'quality_check_pass_waiting_submission',
         ]);
 
-        Log::info('ImageQualityCheckStateService: LeafMachine2 submission succeeded', [
+        Log::info('ImageQualityCheckStateService: accepted images are ready and waiting for user submission', [
             'job_id' => $job->external_job_id,
+            'accepted_images' => $acceptedCount,
+            'rejected_images' => $rejectedCount,
         ]);
     }
 

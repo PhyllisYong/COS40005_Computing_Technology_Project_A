@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { router } from "@inertiajs/react";
 import styled, { keyframes } from "styled-components";
 import {AppSidebar} from '@/components/app-sidebar'; 
@@ -218,7 +218,7 @@ const ValidationTitle = styled.div`
   padding-bottom: 0.2rem;
 `;
 
-const StatusText = styled.div`
+const StatusText = styled.div<{ $tone: 'neutral' | 'success' | 'danger' }>`
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -230,13 +230,13 @@ const StatusText = styled.div`
   .dot {
     width: 8px;
     height: 8px;
-    background: #10b981;
+    background: ${props => props.$tone === 'success' ? '#10b981' : props.$tone === 'danger' ? '#ef4444' : '#9ca3af'};
     border-radius: 50%;
     animation: ${pulse} 2s infinite;
   }
 
   .highlight {
-    color: #059669;
+    color: ${props => props.$tone === 'success' ? '#059669' : props.$tone === 'danger' ? '#dc2626' : '#6b7280'};
     margin-left: auto;
   }
 `;
@@ -330,55 +330,290 @@ const DeleteButton = styled.button`
 
 export default function Digitalisation() {
 
+  type SlotIqcState = 'idle' | 'queued' | 'running' | 'accepted' | 'rejected';
+
+  type JobImageResult = {
+    original_filename?: string | null;
+    iqc_status?: string | null;
+    iqc_decision?: string | null;
+  };
+
   const [images, setImages] = useState<(string | null)[]>([null]);
   const [files,  setFiles]  = useState<(File | null)[]>([null]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [runName, setRunName] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [slotStates, setSlotStates] = useState<Record<number, SlotIqcState>>({});
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isSubmittingBatch, setIsSubmittingBatch] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollIntervalRef = useRef<number | null>(null);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    const imageUrl = URL.createObjectURL(file);
-    setImages(prev => { const n = [...prev]; n[activeIndex] = imageUrl; return n; });
-    setFiles(prev  => { const n = [...prev]; n[activeIndex] = file;     return n; });
-    setStatusMsg(null);
+  const csrfToken = useMemo(
+    () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '',
+    []
+  );
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current !== null) {
+      const intervalId = pollIntervalRef.current;
+      window.clearInterval(intervalId);
+      pollIntervalRef.current = null;
+    }
   };
 
-  const handleSubmit = () => {
-    const uploadFiles = files.filter((f): f is File => f !== null);
-    if (uploadFiles.length === 0) {
+  useEffect(() => {
+    return () => stopPolling();
+  }, []);
+
+  const resetIqcState = () => {
+    stopPolling();
+    setSlotStates({});
+    setCurrentJobId(null);
+    setIsValidating(false);
+    setIsSubmittingBatch(false);
+  };
+
+  const labelForState = (state: SlotIqcState) => {
+    if (state === 'accepted') return { text: 'Clear', tone: 'success' as const };
+    if (state === 'rejected') return { text: 'Blur', tone: 'danger' as const };
+    if (state === 'running' || state === 'queued') return { text: 'Checking', tone: 'neutral' as const };
+    return { text: files[activeIndex] ? 'Waiting' : 'No Image', tone: 'neutral' as const };
+  };
+
+  const pollIqcStatus = (jobId: string, activeSlots: number[]) => {
+    const poll = async () => {
+      try {
+        const response = await fetch(`/api/digitisation/jobs/${encodeURIComponent(jobId)}/status`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          credentials: 'same-origin',
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload.message || 'Failed to retrieve quality-check status.');
+        }
+
+        const latestIqcStatus = ((payload.iqc_status as string | null) ?? '').toLowerCase();
+        const imageResults = Array.isArray(payload.images) ? payload.images as JobImageResult[] : [];
+        const nextStates: Record<number, SlotIqcState> = {};
+
+        activeSlots.forEach((slotIndex, imageIndex) => {
+          const imageResult = imageResults[imageIndex];
+          const decision = (imageResult?.iqc_decision ?? '').toLowerCase();
+
+          if (decision === 'accept') {
+            nextStates[slotIndex] = 'accepted';
+          } else if (decision === 'reject') {
+            nextStates[slotIndex] = 'rejected';
+          } else if (latestIqcStatus === 'running' || latestIqcStatus === 'dispatching' || latestIqcStatus === 'queued' || latestIqcStatus === 'pending') {
+            nextStates[slotIndex] = 'running';
+          } else {
+            nextStates[slotIndex] = 'queued';
+          }
+        });
+
+        setSlotStates(nextStates);
+
+        if (latestIqcStatus === 'completed' || latestIqcStatus === 'failed') {
+          stopPolling();
+          setIsValidating(false);
+
+          const rejectedNames = imageResults
+            .filter((img) => (img.iqc_decision ?? '').toLowerCase() === 'reject')
+            .map((img) => img.original_filename)
+            .filter((name): name is string => typeof name === 'string' && name !== '');
+
+          const accepted = imageResults.filter((img) => (img.iqc_decision ?? '').toLowerCase() === 'accept').length;
+
+          if (accepted > 0) {
+            if (rejectedNames.length > 0) {
+              setStatusMsg({
+                type: 'error',
+                text: `Rejected images: ${rejectedNames.join(', ')}. Please reupload clearer images. Accepted images are ready for batch submission.`,
+              });
+            } else {
+              setStatusMsg({
+                type: 'success',
+                text: 'All images passed quality validation. Press Next Step to submit the batch.',
+              });
+            }
+          } else {
+            setStatusMsg({
+              type: 'error',
+              text: rejectedNames.length > 0
+                ? `Rejected images: ${rejectedNames.join(', ')}. Please reupload clearer images.`
+                : (payload.error_message || 'All uploaded images were rejected. Please reupload clearer images.'),
+            });
+          }
+        }
+      } catch (error) {
+        stopPolling();
+        setIsValidating(false);
+        setStatusMsg({
+          type: 'error',
+          text: error instanceof Error ? error.message : 'Unable to track quality check status.',
+        });
+      }
+    };
+
+    void poll();
+    stopPolling();
+    pollIntervalRef.current = window.setInterval(() => {
+      void poll();
+    }, 2000);
+  };
+
+  const submitForIqc = async (nextFiles: (File | null)[]) => {
+    const uploadEntries = nextFiles
+      .map((file, index) => ({ file, index }))
+      .filter((entry): entry is { file: File; index: number } => entry.file !== null);
+
+    if (uploadEntries.length === 0) {
+      resetIqcState();
       setStatusMsg({ type: 'error', text: 'Please upload at least one image.' });
       return;
     }
+
+    const activeSlots = uploadEntries.map(entry => entry.index);
     const name = runName.trim() || `Run ${new Date().toISOString().slice(0, 19).replace('T', ' ')}`;
     const data = new FormData();
     data.append('run_name', name);
-    uploadFiles.forEach(f => data.append('files[]', f));
-    setSubmitting(true);
-    setStatusMsg(null);
-    router.post('/digitalisation', data, {
-      forceFormData: true,
-      onSuccess: () => {
-        setStatusMsg({ type: 'success', text: `Job "${name}" submitted successfully.` });
-        setTimeout(() => {
-            router.visit('/digitalisation1'); 
-        }, 1000);
-      },
-      //   setImages([null, null, null, null]);
-      //   setFiles([null, null, null, null]);
-      //   setRunName('');
-      //   setActiveIndex(0);
-      //   if (fileInputRef.current) fileInputRef.current.value = '';
-      // },
-      onError: (errors) => {
-        setStatusMsg({ type: 'error', text: Object.values(errors).join(' ') });
-      },
-      onFinish: () => setSubmitting(false),
+    uploadEntries.forEach(({ file }) => data.append('files[]', file));
+
+    stopPolling();
+    setCurrentJobId(null);
+    setIsValidating(true);
+    setStatusMsg({ type: 'success', text: `Uploaded ${uploadEntries.length} image(s). Running quality check...` });
+    setSlotStates(Object.fromEntries(activeSlots.map(slot => [slot, 'queued' as SlotIqcState])));
+
+    try {
+      const response = await fetch('/digitalisation', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': csrfToken,
+        },
+        credentials: 'same-origin',
+        body: data,
+      });
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload.message || 'Upload failed. Please try again.');
+      }
+
+      const newJobId = payload.job_id as string | undefined;
+
+      if (!newJobId) {
+        throw new Error('Upload succeeded, but no job id was returned.');
+      }
+
+      setCurrentJobId(newJobId);
+      pollIqcStatus(newJobId, activeSlots);
+    } catch (error) {
+      setIsValidating(false);
+      setStatusMsg({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Upload failed. Please try again.',
+      });
+    }
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = event.target.files ? Array.from(event.target.files) : [];
+    if (selectedFiles.length === 0) return;
+
+    const startIndex = activeIndex;
+    const requiredLength = startIndex + selectedFiles.length;
+
+    const nextImages = [...images];
+    const nextFiles = [...files];
+
+    while (nextImages.length < requiredLength) {
+      nextImages.push(null);
+      nextFiles.push(null);
+    }
+
+    selectedFiles.forEach((file, offset) => {
+      const slotIndex = startIndex + offset;
+      nextImages[slotIndex] = URL.createObjectURL(file);
+      nextFiles[slotIndex] = file;
     });
+
+    setImages(nextImages);
+    setFiles(nextFiles);
+    setStatusMsg(null);
+    void submitForIqc(nextFiles);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleNextStep = () => {
+    const hasAccepted = Object.entries(slotStates)
+      .some(([idx, value]) => Boolean(files[Number(idx)]) && value === 'accepted');
+
+    if (!hasAccepted) {
+      setStatusMsg({ type: 'error', text: 'Wait until quality validation is accepted before proceeding.' });
+      return;
+    }
+
+    if (!currentJobId) {
+      setStatusMsg({ type: 'error', text: 'No validated batch found. Please upload images again.' });
+      return;
+    }
+
+    setIsSubmittingBatch(true);
+    void fetch(`/api/digitisation/jobs/${encodeURIComponent(currentJobId)}/submit`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRF-TOKEN': csrfToken,
+      },
+      credentials: 'same-origin',
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(payload.message || 'Batch submission failed.');
+        }
+
+        const rejectedImages = Array.isArray(payload.rejected_images) ? payload.rejected_images as string[] : [];
+        if (rejectedImages.length > 0) {
+          setStatusMsg({
+            type: 'error',
+            text: `Rejected images: ${rejectedImages.join(', ')}. Please reupload clearer images. Accepted images were submitted as one batch.`,
+          });
+        } else {
+          setStatusMsg({
+            type: 'success',
+            text: payload.message || 'Accepted images submitted as one batch.',
+          });
+        }
+
+        router.visit('/digitalisation1');
+      })
+      .catch((error: unknown) => {
+        setStatusMsg({
+          type: 'error',
+          text: error instanceof Error ? error.message : 'Batch submission failed.',
+        });
+      })
+      .finally(() => {
+        setIsSubmittingBatch(false);
+      });
   };
 
   const addImageSlot = () => {
@@ -391,6 +626,7 @@ export default function Digitalisation() {
     if (images.length <= 1) {
       setImages([null]);
       setFiles([null]);
+      resetIqcState();
       return;
     }
     const newImages = images.filter((_, i) => i !== index);
@@ -398,7 +634,50 @@ export default function Digitalisation() {
     setImages(newImages);
     setFiles(newFiles);
     setActiveIndex(Math.max(0, index - 1));
+
+    stopPolling();
+    setCurrentJobId(null);
+    setIsValidating(false);
+
+    setSlotStates(prev => {
+      const next: Record<number, SlotIqcState> = {};
+      Object.entries(prev).forEach(([rawKey, value]) => {
+        const key = Number(rawKey);
+        if (key === index) {
+          return;
+        }
+
+        const shiftedKey = key > index ? key - 1 : key;
+        next[shiftedKey] = value;
+      });
+
+      return next;
+    });
+
+    if (!newFiles.some(Boolean)) {
+      resetIqcState();
+      setStatusMsg(null);
+      return;
+    }
+
+    setStatusMsg({ type: 'error', text: 'Image set changed. Quality check will rerun for the updated batch.' });
+    void submitForIqc(newFiles);
   };
+
+  const activeState = slotStates[activeIndex] ?? 'idle';
+  const badge = labelForState(activeState);
+  const filledIndices = files
+    .map((file, index) => ({ file, index }))
+    .filter(item => item.file !== null)
+    .map(item => item.index);
+  const acceptedSlots = filledIndices.filter(index => slotStates[index] === 'accepted').length;
+  const rejectedSlots = filledIndices.filter(index => slotStates[index] === 'rejected').length;
+  const pendingSlots = filledIndices.filter(index => {
+    const state = slotStates[index];
+    return !state || state === 'queued' || state === 'running' || state === 'idle';
+  }).length;
+  const isValidatingAny = isValidating;
+  const canProceed = acceptedSlots > 0;
 
   return (
     <PageContainer>
@@ -432,11 +711,12 @@ export default function Digitalisation() {
                     Validation
                   </ValidationTitle>
 
-                  <StatusText>
+                  <StatusText $tone={badge.tone}>
                     <span className="dot"/>
                     Quality:
-                    <span className="highlight">Clear</span>
+                    <span className="highlight">{badge.text}</span>
                   </StatusText>
+
                 </ValidationBadge>
               </PreviewContainer>
             </LeftColumn>
@@ -472,6 +752,7 @@ export default function Digitalisation() {
                   type="file"
                   hidden
                   accept="image/*"
+                  multiple
                   onChange={handleFileChange}
                   ref={fileInputRef}
                 />
@@ -485,15 +766,20 @@ export default function Digitalisation() {
                 placeholder="Run name (optional)"
                 value={runName}
                 onChange={e => setRunName(e.target.value)}
-                disabled={submitting}
               />
 
-              <NextButton onClick={handleSubmit} disabled={submitting || statusMsg?.type === 'error'}>
-                {submitting ? 'Submitting…' : 'Next Step'}
+              <NextButton onClick={handleNextStep} disabled={!canProceed || isSubmittingBatch || isValidatingAny}>
+                {isSubmittingBatch ? 'Submitting Batch…' : canProceed ? 'Next Step' : isValidatingAny ? 'Validating…' : 'Waiting For Validation'}
               </NextButton>
 
               {statusMsg && (
                 <StatusBanner $type={statusMsg.type}>{statusMsg.text}</StatusBanner>
+              )}
+
+              {filledIndices.length > 0 && (
+                <div style={{ marginTop: '0.65rem', fontSize: '0.72rem', color: '#6b7280', fontWeight: 700 }}>
+                  Accepted: {acceptedSlots} | Rejected: {rejectedSlots} | Checking: {pendingSlots}
+                </div>
               )}
 
             </RightColumn>

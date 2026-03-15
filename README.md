@@ -1,13 +1,18 @@
-
 # 1. HOW TO RUN
+## Initial Setup
+1. run 'composer install' to download all available dependencies for the backend
+2. run 'npm install' for all frontend dependencies such as React and other libraries
+3. run 'cp .env.example .env' to get a copy of the Laravel environment file
+3.1. check and edit configuration for database connection as well as ensure that XAMPP is running the local MySQL server
+4. generate an encryption key by running 'php artisan key:generate'
 
 ## AI Identification Microservice
 
 ### 1. Go to ai_service_identification/ directory  
 ### 2. Create and activate virtual environment  
 ```
-python -m venv .venv
-.venv\Scripts\activate
+python -m venv venv
+venv\Scripts\activate
 ```
 
 ### 3. Install main dependencies   
@@ -17,12 +22,8 @@ pip install -r requirements.txt
 
 ### 4. Run the microservice 
 ```
-run: python -m uvicorn app.main:app --reload --port 8001
+python -m uvicorn app.main:app --reload --port 8001
 ```
-
-# Initial Setup
-
-1. run 'composer install' to download all available dependencies
 
 ---
 
@@ -102,13 +103,6 @@ Run a queue worker for IQC dispatch:
 cd herbarium_digitisation
 php artisan queue:work --queue=iqc,default
 ```
-1. run 'composer install' to download all available dependencies for the backend
-2. run 'npm install' for all frontend dependencies such as React and other libraries
-3. run 'cp .env.example .env' to get a copy of the Laravel environment file
-
-3.1. check and edit configuration for database connection as well as ensure that XAMPP is running the local MySQL server
-
-4. generate an encryption key by running 'php artisan key:generate'
 
 ## Database Setup
 

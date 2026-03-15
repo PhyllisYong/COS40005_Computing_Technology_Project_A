@@ -77,7 +77,7 @@ The IQC service evaluates uploaded images before downstream processing.
 
 ### 1. Go to the IQC service directory
 ```
-cd herbarium_digitisation\services\image_quality_check
+cd image_quality_check
 ```
 
 ### 2. Create and activate a virtual environment

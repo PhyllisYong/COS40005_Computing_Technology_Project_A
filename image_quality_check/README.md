@@ -55,7 +55,7 @@ Optional thresholds:
 1. Move into this directory:
 
 ```powershell
-cd herbarium_digitisation\services\image_quality_check
+cd image_quality_check
 ```
 
 2. Create and activate venv:

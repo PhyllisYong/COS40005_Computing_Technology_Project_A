@@ -16,35 +16,45 @@
   },
   "llm_verified": {
     "field_validation": {
-      "genus": {
-        "correct": true,
-        "suggestion": ""
-      },
       "species": {
         "correct": false,
+        "original": "Chusquea all",
         "suggestion": "Chusquea all. baculifera da Silveira"
-      },
-      "family": {
-        "correct": true,
-        "suggestion": ""
-      },
-      "collector": {
-        "correct": false,
-        "suggestion": [
-          "L, Clark & M. Morel 775",
-          "L. G. Clark"
-        ]
-      },
-      "location": {
-        "correct": false,
-        "suggestion": [
-          ".ra",
-          "Minas Gerais; Mun, Lima Duarte, Serra do Ibitipoca, Parque Estadual (Florestal) do. bitipoca, Paredao do Rio Salto, forking from trail to Ponte da Pedra, 1300 m. 43\u00b052'W, 2142'S, Bamboo in \u201cmata de altitude\u201d on steep cliffs above the river. Surrounding vegetation in ravelly soil"
-        ]
       },
       "country": {
         "correct": true,
-        "suggestion": "Brazil"
+        "original": "",
+        "suggestion": ""
+      },
+      "region": {
+        "correct": true,
+        "original": "Minas Gerais; Mun, Lima Duarte, Serra do Ibitipoca, Parque Estadual (Florestal) do. bitipoca, Paredao do Rio Salto",
+        "suggestion": ""
+      },
+      "municipality": {
+        "correct": true,
+        "original": "",
+        "suggestion": ""
+      },
+      "locality": {
+        "correct": false,
+        "original": "Paredao do Rio Salto, forking from trail to Ponte da Pedra, 1300 m. 43\u00b052'W, 2142'S",
+        "suggestion": "Paredao do Rio Salto, forking from trail to Ponte da Pedra, 1300m"
+      },
+      "elevation": {
+        "correct": true,
+        "original": "",
+        "suggestion": ""
+      },
+      "coordinates": {
+        "correct": false,
+        "original": "43\u00b052'W, 2142'S",
+        "suggestion": "43\u00b052'W, 21\u00b042'S"
+      },
+      "institution": {
+        "correct": true,
+        "original": "HERBARIUM OF IOWA STATE UNIVERSITY",
+        "suggestion": ""
       }
     },
     "confidence": 0.8

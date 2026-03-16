@@ -1,3 +1,6 @@
 ai_service_identification/temp.jpg
 digitisation-pipeline/ocr
 digitisation-pipeline/ner-models
+herbarium_digitisation/uploads
+image_quality_check/imagequality
+image_quality_check/.env

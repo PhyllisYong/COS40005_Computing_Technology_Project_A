@@ -1,0 +1,62 @@
+{
+  "ocr_text": "\u2018HERBARIUM OF IOWA STATE UNIVERSITY\nBRAZIL\nChusquea all. baculifera da Silveira\nMinas Gerais; Mun, Lima Duarte, Serra do Ibitipoca, Parque Estadual (Florestal) do.\nbitipoca, Paredao do Rio Salto, forking from trail to Ponte da Pedra, 1300 m. 43\u00b052'W,\n2142'S,\nBamboo in \u201cmata de altitude\u201d on steep cliffs above the river. Surrounding vegetation in.\nravelly soil, with grasses, Velloviaceae, Melastomaceac, Cactaccac, Iridaceae, lichens,\nnd mosses, Bamboo all vegetative, with a few new shoots, but the population apparently\nflowered and died about 3-4 years ago. Old culms and seedlings scen at cliff top, and\nbelow. Culms erect, 1-1.5 cm in diameter, mostly\nseedlings seen in the elfin forest below. Culms erect, 1-L.5 cm in diameter, mostly\nmuller, 0 1-1,5 m tall. Internodes ca. 5-8 cm long, more or less waxy, green when\n2 February 1991.\nL, Clark & M. Morel 775,\n\u2018Collected under the auspices of the National Science Foundation, lowa State University\nand the Universidade Estadual de Sao Paulo\n\nHERBARIUM OF IOWA STATE UNIVERSITY\nChusquea riosaltensis L.G. Clark\nISOTYPE. Brittonis 44. 1992,\nDet. L. G. Clark\nAugust 1992",
+  "ner_output": {
+    "genus": "Chusquea",
+    "species": "Chusquea all",
+    "family": null,
+    "collector": [],
+    "location": [
+      ".ra",
+      "silveira minas gerais ; mun, lima duarte, serra do ibitipoca, parque estadual ( florestal ) do. bitipoca, paredao do rio salto, forking from trail to ponte da pedra, 1300 m. 43\u00b052 ' w, 2142 ' s, bamboo in \u201c mata de altitude \u201d on steep cliffs above the river. surrounding vegetation in. ravelly soil",
+      "top",
+      "below",
+      "elf"
+    ],
+    "country": null
+  },
+  "llm_verified": {
+    "field_validation": {
+      "species": {
+        "correct": false,
+        "original": "Chusquea all",
+        "suggestion": "Chusquea all. baculifera da Silveira"
+      },
+      "country": {
+        "correct": true,
+        "original": "",
+        "suggestion": ""
+      },
+      "region": {
+        "correct": true,
+        "original": "Minas Gerais; Mun, Lima Duarte, Serra do Ibitipoca, Parque Estadual (Florestal) do. bitipoca, Paredao do Rio Salto",
+        "suggestion": ""
+      },
+      "municipality": {
+        "correct": true,
+        "original": "",
+        "suggestion": ""
+      },
+      "locality": {
+        "correct": false,
+        "original": "Paredao do Rio Salto, forking from trail to Ponte da Pedra, 1300 m. 43\u00b052'W, 2142'S",
+        "suggestion": "Paredao do Rio Salto, forking from trail to Ponte da Pedra, 1300m"
+      },
+      "elevation": {
+        "correct": true,
+        "original": "",
+        "suggestion": ""
+      },
+      "coordinates": {
+        "correct": false,
+        "original": "43\u00b052'W, 2142'S",
+        "suggestion": "43\u00b052'W, 21\u00b042'S"
+      },
+      "institution": {
+        "correct": true,
+        "original": "HERBARIUM OF IOWA STATE UNIVERSITY",
+        "suggestion": ""
+      }
+    },
+    "confidence": 0.8
+  }
+}

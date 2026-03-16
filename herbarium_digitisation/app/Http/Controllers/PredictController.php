@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
+use App\Models\Inferences;
+use App\Models\User;
 
 class PredictController extends Controller
 {
@@ -64,6 +66,25 @@ class PredictController extends Controller
 
         return response()->json([
             'heatmap' => $response->json()['heatmap']
+        ]);
+    }
+
+    public function store(Request $request)
+    {
+        $request->validate([
+            'predicted_label' => 'required|string',
+            'confidence_score' => 'required|numeric'
+        ]);
+
+        $inference = Inferences::create([
+            'predicted_label' => $request->predicted_label,
+            'confidence_score' => $request->confidence_score,
+            'user_id' =>User::inRandomOrder()->first()?->user_id,
+        ]);
+
+        return response()->json([
+            'message' => 'Inference saved',
+            'data' => $inference
         ]);
     }
 }

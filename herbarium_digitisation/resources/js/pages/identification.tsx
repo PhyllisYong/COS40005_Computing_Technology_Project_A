@@ -480,7 +480,23 @@ export default function Identification() {
         refs: getRefs(p.classid)
       }));
       setPredictions(formatted);
+      
+      if (formatted.length > 0) {
+        const top = formatted[0];
 
+        await fetch("/api/inference/save", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-TOKEN": token || ""
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            predicted_label: top.name,
+            confidence_score: top.score
+          })
+        });
+      }
       // If Grad-CAM tab is active, fetch the heatmap immediately
       if (activeTab === "gradcam") {
         fetchHeatmap(file);

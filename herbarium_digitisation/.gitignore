@@ -28,3 +28,4 @@ yarn-error.log
 /.zed
 .venv
 /uploads
+/package-lock.json

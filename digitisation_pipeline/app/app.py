@@ -3,10 +3,9 @@
 import os
 import json
 from fastapi import FastAPI, UploadFile, File, Form
-from ocr_engine import OCREngine
 from ner_engine import NEREngine
+from ocr_engine import OCREngine
 from llm_check import LLMVerifier
-
 
 class HerbariumOrchestrator:
     """
@@ -85,7 +84,7 @@ app = FastAPI()
 llm = LLMVerifier()
 
 ner_model_path = "../ner-models/herbarium_ner_model-darwincore-gbif2"
-taxonomy_path = "../records/gbif_records_database.json"
+taxonomy_path = "../resources/gbif_records_database.json"
 
 orchestrator = HerbariumOrchestrator(
     llm,

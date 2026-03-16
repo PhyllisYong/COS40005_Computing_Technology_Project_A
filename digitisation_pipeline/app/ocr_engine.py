@@ -4,9 +4,10 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytesseract
 
+# i think i 
 
-TEXT_MODEL_PATH = "weights/best_text_detection.pt"
-LINE_MODEL_PATH = "weights/best_line_detection.pt"
+TEXT_MODEL_PATH = "../weights/best_text_detection.pt"
+LINE_MODEL_PATH = "../weights/best_line_detection.pt"
 
 CONF_THRESH = 0.65
 PAD = 1

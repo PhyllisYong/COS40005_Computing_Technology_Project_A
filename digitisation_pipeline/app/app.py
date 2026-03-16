@@ -94,7 +94,7 @@ orchestrator = HerbariumOrchestrator(
     ocr_debug=True
 )
 
-UPLOAD_DIR = "../uploads"
+UPLOAD_DIR = "../herbarium_digitisation/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 

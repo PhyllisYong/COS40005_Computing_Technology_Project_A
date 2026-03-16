@@ -52,4 +52,21 @@ return [
         'callback_token' => env('LM2_CALLBACK_TOKEN'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Image Quality Check (IQC) Microservice
+    |--------------------------------------------------------------------------
+    |
+    | Pre-flight quality checks for uploaded images. Laravel stores uploads,
+    | dispatches IQC asynchronously, then accepts/rejects each image from the
+    | callback payload before submitting accepted images downstream.
+    |
+    */
+    'image_quality_check' => [
+        'url'            => env('IQC_SERVICE_URL'),
+        'api_key'        => env('IQC_API_KEY'),
+        'callback_token' => env('IQC_CALLBACK_TOKEN'),
+        'uploads_dir'    => env('DIGITISATION_UPLOADS_DIR', base_path('uploads')),
+    ],
+
 ];

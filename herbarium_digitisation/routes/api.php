@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\DigitisationJobCallbackController;
+use App\Http\Controllers\Api\ImageQualityCheckCallbackController;
 use App\Http\Middleware\VerifyCallbackToken;
+use App\Http\Middleware\VerifyIqcCallbackToken;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -20,4 +22,11 @@ Route::middleware(VerifyCallbackToken::class)
     ->group(function () {
         Route::post('{jobId}/status', [DigitisationJobCallbackController::class, 'status'])
             ->name('lm2.callback.status');
+    });
+
+Route::middleware(VerifyIqcCallbackToken::class)
+    ->prefix('internal/iqc/jobs')
+    ->group(function () {
+        Route::post('{jobId}/status', [ImageQualityCheckCallbackController::class, 'status'])
+            ->name('iqc.callback.status');
     });

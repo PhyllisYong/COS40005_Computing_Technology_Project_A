@@ -19,6 +19,10 @@ Route::get('/digitalisation', [DigitisationController::class, 'index'])
     ->name('digitalisation');
 Route::post('/digitalisation', [DigitisationController::class, 'store'])
     ->name('digitalisation.store');
+Route::get('/api/digitisation/jobs/{externalJobId}/status', [DigitisationController::class, 'status'])
+    ->name('digitisation.jobs.status');
+Route::post('/api/digitisation/jobs/{externalJobId}/submit', [DigitisationController::class, 'submitAcceptedBatch'])
+    ->name('digitisation.jobs.submit');
 
 // Result file proxy-download
 Route::get('/digitalisation/{job}/results/{filename}', [DigitisationResultController::class, 'download'])

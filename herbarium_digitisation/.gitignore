@@ -26,4 +26,6 @@ yarn-error.log
 /.nova
 /.vscode
 /.zed
+.venv
+/uploads
 /package-lock.json

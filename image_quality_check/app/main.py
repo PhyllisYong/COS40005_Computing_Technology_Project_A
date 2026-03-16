@@ -11,7 +11,7 @@ from typing import Any
 import cv2
 import httpx
 import numpy as np
-from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 from PIL import Image, ImageOps
 from dotenv import load_dotenv
 
@@ -33,9 +33,7 @@ app = FastAPI(title="Image Quality Check Service", version="0.1.0")
 EXIF_ORIENTATION_TAG = 274
 ROTATION_BY_EXIF = {1: 0, 3: 180, 6: 270, 8: 90}
 
-API_KEY = os.getenv("IQC_API_KEY", "")
 CALLBACK_URL = os.getenv("IQC_CALLBACK_URL", "")
-CALLBACK_TOKEN = os.getenv("IQC_CALLBACK_TOKEN", "")
 CALLBACK_TIMEOUT_SECONDS = float(os.getenv("IQC_CALLBACK_TIMEOUT_SECONDS", "30"))
 CALLBACK_MAX_RETRIES = int(os.getenv("IQC_CALLBACK_MAX_RETRIES", "3"))
 CALLBACK_RETRY_DELAY_SECONDS = float(os.getenv("IQC_CALLBACK_RETRY_DELAY_SECONDS", "1.5"))
@@ -67,12 +65,7 @@ async def upload_job(
     job_id: str = Form(...),
     image_manifest: str | None = Form(default=None),
     images: list[UploadFile] = File(...),
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> dict[str, Any]:
-    if not API_KEY or x_api_key != API_KEY:
-        logger.warning("Unauthorized IQC submission rejected for job_id=%s", job_id)
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
     manifest = _parse_manifest(image_manifest)
 
     buffered: list[InMemoryImage] = []
@@ -251,13 +244,12 @@ def evaluate_image(image: InMemoryImage) -> dict[str, Any]:
 
 
 async def post_callback(job_id: str, payload: dict[str, Any]) -> None:
-    if not CALLBACK_URL or not CALLBACK_TOKEN:
+    if not CALLBACK_URL:
         logger.warning("Callback skipped for job_id=%s because callback env is missing", job_id)
         return
 
     url = f"{CALLBACK_URL.rstrip('/')}/{job_id}/status"
     headers = {
-        "Authorization": f"Bearer {CALLBACK_TOKEN}",
         "Content-Type": "application/json",
     }
 

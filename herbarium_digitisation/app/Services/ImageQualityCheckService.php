@@ -8,13 +8,11 @@ use RuntimeException;
 class ImageQualityCheckService
 {
     private string $baseUrl;
-    private string $apiKey;
 
     public function __construct(
         private readonly UploadStorageService $uploadStorage,
     ) {
         $this->baseUrl = rtrim((string) config('services.image_quality_check.url'), '/');
-        $this->apiKey = (string) config('services.image_quality_check.api_key');
     }
 
     /**
@@ -24,8 +22,7 @@ class ImageQualityCheckService
      */
     public function submitStoredImages(string $externalJobId, array $images): array
     {
-        $request = Http::withHeader('X-API-Key', $this->apiKey)
-            ->timeout(60)
+        $request = Http::timeout(60)
             ->asMultipart();
 
         $manifest = [];

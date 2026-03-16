@@ -9,13 +9,11 @@ use RuntimeException;
 class LeafMachine2Service
 {
     private string $baseUrl;
-    private string $apiKey;
 
     public function __construct(
         private readonly UploadStorageService $uploadStorage,
     ) {
         $this->baseUrl = rtrim(config('services.leafmachine2.url'), '/');
-        $this->apiKey  = config('services.leafmachine2.api_key');
     }
 
     /**
@@ -35,8 +33,7 @@ class LeafMachine2Service
         array $files,
         array $configOverrides = []
     ): array {
-        $request = Http::withHeader('X-API-Key', $this->apiKey)
-            ->timeout(30)
+        $request = Http::timeout(30)
             ->asMultipart();
 
         // Attach each uploaded file as a separate 'files' part
@@ -76,8 +73,7 @@ class LeafMachine2Service
         array $images,
         array $configOverrides = []
     ): array {
-        $request = Http::withHeader('X-API-Key', $this->apiKey)
-            ->timeout(30)
+        $request = Http::timeout(30)
             ->asMultipart();
 
         $attachedCount = 0;
@@ -133,8 +129,7 @@ class LeafMachine2Service
     {
         $encodedFilename = rawurlencode($filename);
 
-        $response = Http::withHeader('X-API-Key', $this->apiKey)
-            ->timeout(120)
+        $response = Http::timeout(120)
             ->get("{$this->baseUrl}/api/v1/jobs/{$jobId}/results/{$encodedFilename}");
 
         if (!$response->successful()) {

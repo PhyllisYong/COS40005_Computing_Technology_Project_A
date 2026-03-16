@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SubmitDigitisationJobRequest;
+use App\Http\Requests\SubmitOCRJobRequest;
 use App\Models\ExtractJob;
 use App\Services\LeafMachine2Service;
 use Illuminate\Http\RedirectResponse;
@@ -88,5 +89,69 @@ class DigitisationController extends Controller
 
         return redirect()->route('digitalisation')
             ->with('success', "Job '{$job->job_name}' submitted successfully.");
+    }
+    
+    public function submitOCR(SubmitOCRJobRequest $request)
+    {
+        $request->validate([
+            'images.*' => 'required|image|max:10240', // multiple images
+            'run_name' => 'nullable|string|max:255',
+        ]);
+
+        $user = $request->user();
+        $job_id = now()->format('Ymd_His') . '_' . Str::random(4);
+        $run_name = $request->input('run_name', 'Default Run');
+
+        $uploaded_paths = [];
+        foreach ($request->file('images') as $file) {
+            $path = $file->store("digitisation/{$user->id}/{$job_id}", 'public');
+            $uploaded_paths[] = $path;
+        }
+
+        // Create job record
+        $job = DigitisationJob::create([
+            'user_id' => $user->id,
+            'job_id' => $job_id,
+            'run_name' => $run_name,
+            'status' => 'pending',
+            'output_path' => json_encode($uploaded_paths),
+        ]);
+
+        $python_api_url = config('services.ocr_pipeline.url'); // e.g., http://localhost:5000/process
+
+        $results = [];
+        foreach ($uploaded_paths as $path) {
+            $response = Http::attach(
+                'file', fopen(storage_path("app/public/{$path}"), 'r'), basename($path)
+            )->post($python_api_url, [
+                'job_id' => $job_id,
+            ]);
+
+            if ($response->successful()) {
+                $res = $response->json()['results'][0]; // single image
+                DigitisationResult::create([
+                    'digitisation_job_id' => $job->id,
+                    'record_index' => 0,
+                    'data' => $res,
+                ]);
+                $results[] = $res;
+            } else {
+                $job->update([
+                    'status' => 'failed',
+                    'error_message' => $response->body(),
+                ]);
+                return response()->json(['message' => 'OCR failed', 'error' => $response->body()], 500);
+            }
+        }
+
+        $job->update([
+            'status' => 'completed',
+            'results_imported_at' => now(),
+        ]);
+
+        return response()->json([
+            'job_id' => $job_id,
+            'results' => $results,
+        ]);
     }
 }

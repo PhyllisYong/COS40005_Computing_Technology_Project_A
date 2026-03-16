@@ -118,3 +118,21 @@ you can change the order of migrations by simply changing the timestamp of the m
 
 1. run `php artisan serve` for the backend
 2. run `npm run dev` for the frontend
+
+## Herbarium Digitisation Microservice
+
+### 1. Go to digitisation_pipeline directory  
+### 2. Create and activate virtual environment  
+```
+python -m venv ocr-pipeline
+ocr-pipeline\Scripts\activate
+```
+
+### 3. Install main dependencies   
+```
+pip install -r requirements.txt
+```
+
+### 4. Run the microservice 
+```
+python -m uvicorn app.app:app --reload --port 8002

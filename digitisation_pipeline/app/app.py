@@ -42,16 +42,16 @@ class HerbariumOrchestrator:
             img_result_dir = os.path.join(self.results_root, base_name)
             os.makedirs(img_result_dir, exist_ok=True)
 
-            # 1️⃣ OCR
+            # OCR
             ocr_results = self.ocr_engine.run([img_path])
             ocr_text = ocr_results[0]["text"] if ocr_results else ""
             print(f"OCR text extracted ({len(ocr_text)} chars)")
 
-            # 2️⃣ NER
+            # NER
             ner_result = self.ner_engine.run(ocr_text)
             print(f"NER output: {ner_result}")
 
-            # 3️⃣ LLM verification
+            # LLM verification
             verified_result = self.verifier.verify(ocr_text, ner_result)
             print(f"LLM verified output: {verified_result}")
 

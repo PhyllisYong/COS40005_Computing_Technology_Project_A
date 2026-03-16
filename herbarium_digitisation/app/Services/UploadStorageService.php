@@ -12,7 +12,11 @@ class UploadStorageService
 
     public function __construct()
     {
-        $configuredPath = (string) config('services.image_quality_check.uploads_dir', base_path('uploads'));
+        $configuredPath = trim((string) config('services.image_quality_check.uploads_dir', ''));
+        if ($configuredPath === '') {
+            $configuredPath = base_path('uploads');
+        }
+
         $this->uploadsRoot = $this->normalizeAbsolutePath($configuredPath);
     }
 

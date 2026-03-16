@@ -71,7 +71,7 @@ uvicorn api.main:app --reload --port 9000
 
 ---
 
-# Image Quality Check (IQC) Microservice
+## Image Quality Check (IQC) Microservice
 
 The IQC service evaluates uploaded images before downstream processing.
 
@@ -97,13 +97,6 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 9001 --reload
 ```
 
-### 5. Laravel side requirements
-Run a queue worker for IQC dispatch:
-```
-cd herbarium_digitisation
-php artisan queue:work --queue=iqc,default
-```
-
 ## Database Setup
 
 1. `php artisan migrate` creates the database schema
@@ -118,6 +111,7 @@ you can change the order of migrations by simply changing the timestamp of the m
 
 1. run `php artisan serve` for the backend
 2. run `npm run dev` for the frontend
+3. run `php artisan queue:work --queue=default` for service queues
 
 ## Herbarium Digitisation Microservice
 

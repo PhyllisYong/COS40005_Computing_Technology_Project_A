@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\SubmitDigitisationJobRequest;
+use App\Jobs\DispatchImageQualityCheckJob;
+use App\Jobs\DispatchLeafMachineBatchJob;
+use App\Jobs\DispatchOcrBatchJob;
 use App\Models\ExtractJob;
-use App\Services\LeafMachine2Service;
 use App\Services\UploadStorageService;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -18,7 +21,6 @@ class DigitisationController extends Controller
 {
     public function __construct(
         private readonly UploadStorageService $uploadStorage,
-        private readonly LeafMachine2Service $lm2,
     ) {
     }
 
@@ -95,7 +97,7 @@ class DigitisationController extends Controller
             }
 
             DispatchImageQualityCheckJob::dispatch($job->getKey())
-                ->onQueue('iqc');
+                ->onQueue('default');
 
             $job->update([
                 'iqc_status'    => 'queued',
@@ -221,12 +223,19 @@ class DigitisationController extends Controller
             ->values()
             ->all();
 
-        $this->lm2->submitStoredImages(
-            $job->external_job_id,
-            $job->job_name ?? 'Digitisation Run',
-            $acceptedImages,
-            $job->config_overrides ?? []
-        );
+        Bus::chain([
+            new DispatchOcrBatchJob(
+                $job->getKey(),
+                $acceptedImages,
+                (string) ($job->job_name ?? 'Digitisation Run')
+            ),
+            new DispatchLeafMachineBatchJob(
+                $job->getKey(),
+                $acceptedImages,
+                (string) ($job->job_name ?? 'Digitisation Run'),
+                $job->config_overrides ?? []
+            ),
+        ])->onQueue('default')->dispatch();
 
         $job->update([
             'progress_step' => $rejectedNames !== []
@@ -235,7 +244,7 @@ class DigitisationController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Accepted images submitted as one batch.',
+            'message' => 'Accepted images queued for submission to OCR and LeafMachine.',
             'submitted_images_count' => count($acceptedImages),
             'rejected_images' => $rejectedNames,
         ]);

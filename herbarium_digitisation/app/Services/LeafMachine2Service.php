@@ -35,9 +35,11 @@ class LeafMachine2Service
         array $files,
         array $configOverrides = []
     ): array {
-        $request = Http::withHeader('X-API-Key', $this->apiKey)
-            ->timeout(30)
-            ->asMultipart();
+        $request = Http::timeout(30)->asMultipart();
+
+        if ($this->apiKey !== '') {
+            $request = $request->withHeader('X-API-Key', $this->apiKey);
+        }
 
         // Attach each uploaded file as a separate 'files' part
         foreach ($files as $file) {
@@ -76,9 +78,11 @@ class LeafMachine2Service
         array $images,
         array $configOverrides = []
     ): array {
-        $request = Http::withHeader('X-API-Key', $this->apiKey)
-            ->timeout(30)
-            ->asMultipart();
+        $request = Http::timeout(30)->asMultipart();
+
+        if ($this->apiKey !== '') {
+            $request = $request->withHeader('X-API-Key', $this->apiKey);
+        }
 
         $attachedCount = 0;
 
@@ -133,9 +137,13 @@ class LeafMachine2Service
     {
         $encodedFilename = rawurlencode($filename);
 
-        $response = Http::withHeader('X-API-Key', $this->apiKey)
-            ->timeout(120)
-            ->get("{$this->baseUrl}/api/v1/jobs/{$jobId}/results/{$encodedFilename}");
+        $request = Http::timeout(120);
+
+        if ($this->apiKey !== '') {
+            $request = $request->withHeader('X-API-Key', $this->apiKey);
+        }
+
+        $response = $request->get("{$this->baseUrl}/api/v1/jobs/{$jobId}/results/{$encodedFilename}");
 
         if (!$response->successful()) {
             throw new RuntimeException(

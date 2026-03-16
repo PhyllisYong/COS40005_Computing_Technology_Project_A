@@ -41,7 +41,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Connection settings for the LeafMachine2 digitisation microservice.
-    | LM2_API_KEY is used when Laravel calls the microservice.
+    | LM2_API_KEY is optional (sent only when configured).
     | LM2_CALLBACK_TOKEN is the bearer token the microservice must include
     | when it calls back to Laravel's internal callback endpoint.
     |
@@ -60,6 +60,7 @@ return [
     | Pre-flight quality checks for uploaded images. Laravel stores uploads,
     | dispatches IQC asynchronously, then accepts/rejects each image from the
     | callback payload before submitting accepted images downstream.
+    | IQC_API_KEY is optional (sent only when configured).
     |
     */
     'image_quality_check' => [
@@ -67,6 +68,12 @@ return [
         'api_key'        => env('IQC_API_KEY'),
         'callback_token' => env('IQC_CALLBACK_TOKEN'),
         'uploads_dir'    => env('DIGITISATION_UPLOADS_DIR', base_path('uploads')),
+    ],
+
+    'ocr_pipeline' => [
+        'url'         => env('OCR_PIPELINE_URL'),
+        'api_key'     => env('OCR_PIPELINE_API_KEY'),
+        'submit_path' => env('OCR_PIPELINE_SUBMIT_PATH', '/api/v1/jobs/upload'),
     ],
 
 ];

@@ -7,7 +7,7 @@ const PageContainer = styled.div`
   display: flex;
   background: #f3f4f6;
   min-height: 100vh;
-  width: 100%; /* Ensure container takes full width */
+  width: 100%;
 `;
 
 const MainContent = styled.main`
@@ -20,7 +20,7 @@ const MainContent = styled.main`
   height: 100vh;
   overflow-y: auto;
   position: relative;
-  box-sizing: border-box; /* Includes padding in width calculation */
+  box-sizing: border-box;
 `;
 
 const AboutSection = styled.section`
@@ -29,7 +29,7 @@ const AboutSection = styled.section`
   border-radius: 1.5rem;
   border: 1px solid #f3f4f6;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  width: 100%; /* Stretch to fill MainContent */
+  width: 100%;
   box-sizing: border-box;
   
   h2 {
@@ -41,7 +41,6 @@ const AboutSection = styled.section`
   p {
     color: #6b7280;
     line-height: 1.6;
-    /* Removed max-width to let text fill the container */
     margin: 0;
   }
   
@@ -101,7 +100,7 @@ const IconButton = styled.button`
   color: #5d7356;
   transition: all 0.2s;
   z-index: 2;
-  flex-shrink: 0; /* Prevents button from squishing */
+  flex-shrink: 0;
 
   &:hover {
     background: #5d7356;
@@ -130,15 +129,18 @@ const SpeciesCard = styled.div`
     box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
   }
 
-  .img-placeholder {
+  .img-container {
     height: 200px;
+    width: 100%;
     background: #fdfcf9;
     border-bottom: 1px solid #f3f4f6;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #e5e7eb;
-    font-weight: 800;
+    overflow: hidden;
+    
+    img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
   }
 
   .info {
@@ -175,7 +177,7 @@ const FooterLogoContainer = styled.div`
   gap: 5rem; 
   padding: 4rem 0;
   margin-top: auto; 
-  width: 100%; /* Ensure it spans the full width of MainContent */
+  width: 100%;
 
   img {
     height: 100px; 
@@ -184,7 +186,7 @@ const FooterLogoContainer = styled.div`
   }
 `;
 
-export default function home() {
+export default function Home() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const handleScroll = (direction: 'left' | 'right') => {
@@ -197,11 +199,28 @@ export default function home() {
     }
   };
 
+  // Added image URLs to the data array
   const recentSpecies = [
-    { name: "Swiss Cheese Plant", scientific: "Monstera deliciosa" },
-    { name: "Snake Plant", scientific: "Dracaena trifasciata" },
-    { name: "Fiddle Leaf Fig", scientific: "Ficus lyrata" },
-    { name: "Rubber Plant", scientific: "Ficus elastica" },
+    { 
+      name: "Swiss Cheese Plant", 
+      scientific: "Monstera deliciosa",
+      image: "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?auto=format&fit=crop&w=500" 
+    },
+    { 
+      name: "Snake Plant", 
+      scientific: "Dracaena trifasciata",
+      image: "https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?auto=format&fit=crop&w=500" 
+    },
+    { 
+      name: "Fiddle Leaf Fig", 
+      scientific: "Ficus lyrata",
+      image: "https://images.unsplash.com/photo-1544860707-c352cc5a92e3?auto=format&fit=crop&w=400" 
+    },
+    { 
+      name: "Rubber Plant", 
+      scientific: "Ficus elastica",
+      image: "https://images.unsplash.com/photo-1446071103084-c257b5f70672?auto=format&fit=crop&w=500" 
+    },
   ];
 
   return (
@@ -233,7 +252,7 @@ export default function home() {
               <GalleryImage src="https://images.unsplash.com/photo-1545241047-6083a3684587?auto=format&fit=crop&w=600" />
               <GalleryImage src="https://images.unsplash.com/photo-1463171379579-3fdfb86d6285?auto=format&fit=crop&w=600" />
               <GalleryImage src="https://images.unsplash.com/photo-1520412099551-62b6bafeb5bb?auto=format&fit=crop&w=600" />
-              <GalleryImage src="https://images.unsplash.com/photo-1501004318641-729e8e26bd05?auto=format&fit=crop&w=600" />
+              <GalleryImage src="https://images.unsplash.com/photo-1491147334573-44cbb4602074?auto=format&fit=crop&w=600" />
             </CarouselContainer>
             
             <IconButton onClick={() => handleScroll('right')}>
@@ -247,7 +266,9 @@ export default function home() {
           <SpeciesGrid>
             {recentSpecies.map((plant, i) => (
               <SpeciesCard key={i}>
-                <div className="img-placeholder">IMAGE PREVIEW</div>
+                <div className="img-container">
+                  <img src={plant.image} alt={plant.name} />
+                </div>
                 <div className="info">
                   <h3>{plant.name}</h3>
                   <span>{plant.scientific}</span>

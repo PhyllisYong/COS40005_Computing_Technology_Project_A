@@ -23,7 +23,7 @@ class HerbariumOrchestrator:
         self.verifier = llm_verifier
 
         # Results folder
-        self.results_root = "results"
+        self.results_root = "../results"
         os.makedirs(self.results_root, exist_ok=True)
 
     def process_images(self, image_paths):
@@ -96,7 +96,6 @@ orchestrator = HerbariumOrchestrator(
 UPLOAD_DIR = "../herbarium_digitisation/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-
 @app.post("/process")
 async def process_job(
     job_id: str = Form(...),
@@ -121,3 +120,41 @@ async def process_job(
         "job_id": job_id,
         "results": results
     }
+
+
+
+def run_local_test(image_paths):
+    """
+    Run the pipeline locally without FastAPI.
+    Useful for debugging the OCR + NER + LLM pipeline.
+    """
+
+    print("\n==============================")
+    print("RUNNING LOCAL PIPELINE TEST")
+    print("==============================")
+
+    results = orchestrator.process_images(image_paths)
+
+    print("\n===== FINAL RESULTS =====")
+
+    for r in results:
+        print("\nIMAGE:", r["image"])
+        print("\nOCR TEXT:\n", r["ocr_text"])
+        print("\nNER OUTPUT:\n", json.dumps(r["ner_output"], indent=2))
+        print("\nLLM VERIFIED:\n", json.dumps(r["llm_verified"], indent=2))
+
+    return results
+
+
+if __name__ == "__main__":
+
+    import sys
+
+    if len(sys.argv) < 2:
+        print("Usage:")
+        print("python orchestrator.py image1.jpg image2.jpg")
+        sys.exit(1)
+
+    image_paths = sys.argv[1:]
+
+    run_local_test(image_paths)

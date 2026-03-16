@@ -15,7 +15,7 @@ PAD_X = 6
 
 TESS_CONFIG = "--oem 1 --psm 7"
 
-RESULTS_DIR = "results_debug"
+RESULTS_DIR = "../results_debug"
 
 
 class OCREngine:

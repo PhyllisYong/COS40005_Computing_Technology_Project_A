@@ -24,46 +24,46 @@ class LLMVerifier:
         """
 
         prompt = f"""
-You are a botanist verifying structured data extracted from a herbarium label.
+            You are a botanist verifying structured data extracted from a herbarium label.
 
-Your job is to check whether each extracted field correctly matches the OCR text.
+            Your job is to check whether each extracted field correctly matches the OCR text.
 
-Original OCR text:
-{ocr_text}
+            Original OCR text:
+            {ocr_text}
 
-Extracted data:
-{json.dumps(ner_output, indent=2)}
+            Extracted data:
+            {json.dumps(ner_output, indent=2)}
 
-For EACH field:
+            For EACH field:
 
-1. Check if the value appears in the OCR text.
-2. Determine if the label type is correct (species, location, coordinates, etc).
-3. Detect OCR mistakes.
-4. Suggest corrections ONLY if necessary.
+            1. Check if the value appears in the OCR text.
+            2. Determine if the label type is correct (species, location, coordinates, etc).
+            3. Detect OCR mistakes.
+            4. Suggest corrections ONLY if necessary.
 
-IMPORTANT RULES:
-- Do NOT invent information.
-- Do NOT swap fields unless clearly incorrect.
-- Coordinates must contain degrees (°).
-- Elevation must contain "m" or "meters".
-- Species must follow botanical binomial format.
+            IMPORTANT RULES:
+            - Do NOT invent information.
+            - Do NOT swap fields unless clearly incorrect.
+            - Coordinates must contain degrees (°).
+            - Elevation must contain "m" or "meters".
+            - Species must follow botanical binomial format.
 
-Return JSON ONLY in this format:
+            Return JSON ONLY in this format:
 
-{{
-"field_validation": {{
-"species": {{"correct": true/false, "original": "","suggestion": ""}},
-"country": {{"correct": true/false, "original": "","suggestion": ""}},
-"region": {{"correct": true/false, "original": "","suggestion": ""}},
-"municipality": {{"correct": true/false, "original": "","suggestion": ""}},
-"locality": {{"correct": true/false, "original": "","suggestion": ""}},
-"elevation": {{"correct": true/false, "original": "","suggestion": ""}},
-"coordinates": {{"correct": true/false, "original": "","suggestion": ""}},
-"institution": {{"correct": true/false, "original": "","suggestion": ""}}
-}},
-"confidence": 0-1
-}}
-"""
+            {{
+            "field_validation": {{
+            "species": {{"correct": true/false, "original": "","suggestion": ""}},
+            "country": {{"correct": true/false, "original": "","suggestion": ""}},
+            "region": {{"correct": true/false, "original": "","suggestion": ""}},
+            "municipality": {{"correct": true/false, "original": "","suggestion": ""}},
+            "locality": {{"correct": true/false, "original": "","suggestion": ""}},
+            "elevation": {{"correct": true/false, "original": "","suggestion": ""}},
+            "coordinates": {{"correct": true/false, "original": "","suggestion": ""}},
+            "institution": {{"correct": true/false, "original": "","suggestion": ""}}
+            }},
+            "confidence": 0-1
+            }}
+            """
 
         response = requests.post(
             self.OLLAMA_URL,

@@ -66,27 +66,7 @@ class LLMVerifier:
             You are a botanist verifying structured data extracted from a herbarium label.
             Your job is to check whether each extracted field correctly matches the OCR text.
 
-            You may use the following reference knowledge:
-
-            {trimmed_retrieved}.
-
-            Field-specific reference knowledge:
-
-            Family:
-            {compact_field_context.get("family", "")}
-
-            Genus:
-            {compact_field_context.get("genus", "")}
-
-            Species:
-            {compact_field_context.get("species", "")}
-
-            Location:
-            {compact_field_context.get("location", "")}
-
-            Collector:
-            {compact_field_context.get("collector", "")}
-
+            
             Original OCR text:
             {trimmed_ocr}
 
@@ -319,3 +299,24 @@ class LLMVerifier:
 #     verifier = LLMVerifier()
 #     result = verifier.verify(ocr_text, ner_output)
 #     print(json.dumps(result, indent=2))
+
+# You may use the following reference knowledge:
+
+#             {trimmed_retrieved}.
+
+#             Field-specific reference knowledge:
+
+#             Family:
+#             {compact_field_context.get("family", "")}
+
+#             Genus:
+#             {compact_field_context.get("genus", "")}
+
+#             Species:
+#             {compact_field_context.get("species", "")}
+
+#             Location:
+#             {compact_field_context.get("location", "")}
+
+#             Collector:
+#             {compact_field_context.get("collector", "")}

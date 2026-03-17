@@ -724,7 +724,7 @@ export default function Digitalisation1() {
                   </SelectWrap>
 
                   {Object.keys(formData).length === 0 ? (
-                    <ErrorText>No resolved LLM fields available yet for this image.</ErrorText>
+                    <ErrorText></ErrorText>
                   ) : (
                     Object.entries(formData).map(([fieldKey, fieldValue]) => (
                       <InputGroup key={fieldKey}>

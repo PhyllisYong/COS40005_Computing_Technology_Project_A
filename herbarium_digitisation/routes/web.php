@@ -14,6 +14,11 @@ Route::inertia('/digitalisation1', 'digitalisation1')->name('digitalisation1');
 // identification service route
 Route::post('/api/identify', [PredictController::class, 'identify']);
 Route::post('/api/heatmap', [PredictController::class, 'heatmap']);
+// save inferenve result
+Route::post('/api/inference/save', [PredictController::class, 'store']);
+
+
+
 // ─── Digitisation ────────────────────────────────────────────────────────────
 Route::get('/digitalisation', [DigitisationController::class, 'index'])
     ->name('digitalisation');

@@ -13,8 +13,7 @@ return new class extends Migration
     {
         Schema::create('inferences', function (Blueprint $table) {
             $table->id("inference_id");
-            $table->string("predicted_label", length:255)->nullable();
-            $table->string("actual_label", length:255)->nullable();
+            $table->string("predicted_label", length:255)->nullable(); #remove the actual label cuz seems redudant
             $table->double("confidence_score")->nullable();
             $table->foreignId('user_id')
                   ->references("user_id")

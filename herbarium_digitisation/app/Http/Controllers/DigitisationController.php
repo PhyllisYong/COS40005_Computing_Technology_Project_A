@@ -11,6 +11,8 @@ use App\Services\UploadStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -303,8 +305,13 @@ class DigitisationController extends Controller
                 'image_id' => $image->image_id,
                 'original_filename' => $image->original_filename,
                 'stored_path' => $image->stored_path,
+                'preview_url' => route('digitisation.jobs.images.preview', [
+                    'externalJobId' => $job->external_job_id,
+                    'imageId' => $image->image_id,
+                ]),
                 'ocr_status' => $image->ocr_status ?? 'pending',
                 'llm_verified' => $image->ocr_llm_verified ?? [],
+                'editable_details' => $this->extractEditableDetails(is_array($image->ocr_llm_verified) ? $image->ocr_llm_verified : []),
             ])
             ->values();
 
@@ -315,5 +322,159 @@ class DigitisationController extends Controller
             'ocr_error_message' => $job->ocr_error_message,
             'images' => $images,
         ]);
+    }
+
+    public function imagePreview(string $externalJobId, int $imageId): BinaryFileResponse|JsonResponse
+    {
+        $job = ExtractJob::where('external_job_id', $externalJobId)->first();
+
+        if (!$job) {
+            return response()->json([
+                'message' => 'Digitisation job not found.',
+            ], 404);
+        }
+
+        $image = $job->images()->where('image_id', $imageId)->first();
+        if (!$image) {
+            return response()->json([
+                'message' => 'Image not found for this job.',
+            ], 404);
+        }
+
+        if (!is_string($image->stored_path) || $image->stored_path === '') {
+            return response()->json([
+                'message' => 'Image path is not available.',
+            ], 422);
+        }
+
+        $absolutePath = $this->uploadStorage->absolutePath($image->stored_path);
+        if (!file_exists($absolutePath)) {
+            return response()->json([
+                'message' => 'Image file is missing on disk.',
+            ], 404);
+        }
+
+        return response()->file($absolutePath, [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+        ]);
+    }
+
+    public function saveImageDetails(string $externalJobId, int $imageId, Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'name' => ['nullable', 'string', 'max:255'],
+            'scientific' => ['nullable', 'string', 'max:255'],
+            'location' => ['nullable', 'string', 'max:255'],
+            'date' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Invalid details payload.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $job = ExtractJob::where('external_job_id', $externalJobId)->first();
+
+        if (!$job) {
+            return response()->json([
+                'message' => 'Digitisation job not found.',
+            ], 404);
+        }
+
+        $image = $job->images()->where('image_id', $imageId)->first();
+        if (!$image) {
+            return response()->json([
+                'message' => 'Image not found for this job.',
+            ], 404);
+        }
+
+        $editable = $this->normalizeEditableDetails($validator->validated());
+        $current = is_array($image->ocr_llm_verified) ? $image->ocr_llm_verified : [];
+        $current['edited_details'] = $editable;
+
+        $image->update([
+            'ocr_llm_verified' => $current,
+        ]);
+
+        return response()->json([
+            'message' => 'Image details saved.',
+            'image_id' => $image->image_id,
+            'editable_details' => $editable,
+            'llm_verified' => $current,
+        ]);
+    }
+
+    private function normalizeEditableDetails(array $input): array
+    {
+        return [
+            'name' => trim((string) ($input['name'] ?? '')),
+            'scientific' => trim((string) ($input['scientific'] ?? '')),
+            'location' => trim((string) ($input['location'] ?? '')),
+            'date' => trim((string) ($input['date'] ?? '')),
+        ];
+    }
+
+    private function extractEditableDetails(array $llmVerified): array
+    {
+        if (isset($llmVerified['edited_details']) && is_array($llmVerified['edited_details'])) {
+            return $this->normalizeEditableDetails($llmVerified['edited_details']);
+        }
+
+        $fieldValidation = [];
+        if (isset($llmVerified['field_validation']) && is_array($llmVerified['field_validation'])) {
+            $fieldValidation = $llmVerified['field_validation'];
+        }
+
+        $scientific = $this->pickFieldValue($fieldValidation, 'species')
+            ?: $this->pickAnyString($llmVerified, ['scientific_name', 'taxon', 'species']);
+
+        $location = $this->pickFieldValue($fieldValidation, 'locality')
+            ?: $this->pickFieldValue($fieldValidation, 'municipality')
+            ?: $this->pickFieldValue($fieldValidation, 'region')
+            ?: $this->pickFieldValue($fieldValidation, 'country')
+            ?: $this->pickAnyString($llmVerified, ['location', 'locality', 'country', 'state']);
+
+        return [
+            'name' => $this->pickAnyString($llmVerified, ['specimen_name', 'collector_name', 'name']),
+            'scientific' => $scientific,
+            'location' => $location,
+            'date' => $this->pickAnyString($llmVerified, ['date_collected', 'event_date', 'date']),
+        ];
+    }
+
+    private function pickFieldValue(array $fieldValidation, string $field): string
+    {
+        $value = $fieldValidation[$field] ?? null;
+        if (!is_array($value)) {
+            return '';
+        }
+
+        $suggestion = trim((string) ($value['suggestion'] ?? ''));
+        if ($suggestion !== '') {
+            return $suggestion;
+        }
+
+        return trim((string) ($value['original'] ?? ''));
+    }
+
+    private function pickAnyString(array $source, array $keys): string
+    {
+        foreach ($keys as $key) {
+            if (!array_key_exists($key, $source)) {
+                continue;
+            }
+
+            $value = $source[$key];
+            if (is_string($value) || is_numeric($value) || is_bool($value)) {
+                $output = trim((string) $value);
+                if ($output !== '') {
+                    return $output;
+                }
+            }
+        }
+
+        return '';
     }
 }

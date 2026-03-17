@@ -6,8 +6,10 @@ type OcrImageResult = {
   image_id: number;
   original_filename: string;
   stored_path: string;
+  preview_url?: string;
   ocr_status: string;
   llm_verified: Record<string, unknown>;
+  editable_details?: FormData;
 };
 
 type OcrResultsResponse = {
@@ -76,16 +78,16 @@ const Header = styled.header`
 `;
 
 const StatusPanel = styled.section`
-  background: white;
-  border-radius: 1rem;
-  border: 1px solid #e5e7eb;
-  padding: 0.85rem 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
+  // background: white;
+  // border-radius: 1rem;
+  // border: 1px solid #e5e7eb;
+  // padding: 0.85rem 1rem;
+  // display: flex;
+  // justify-content: space-between;
+  // align-items: center;
+  // gap: 0.75rem;
+  // flex-wrap: wrap;
+  // margin-bottom: 1.5rem;
 `;
 
 const StatusBadge = styled.span<{ $tone: "ok" | "warn" | "error" }>`
@@ -140,6 +142,13 @@ const PlaceholderText = styled.p`
   font-size: 1.5rem;
   text-transform: uppercase;
   opacity: 0.2;
+`;
+
+const StageImage = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 0.75rem;
 `;
 
 const ValidationOverlay = styled.div`
@@ -303,6 +312,13 @@ const ErrorText = styled.p`
   font-size: 0.8rem;
 `;
 
+const SaveMessage = styled.p<{ $tone: "success" | "error" }>`
+  margin: 0 0 0.75rem 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: ${({ $tone }) => ($tone === "success" ? "#166534" : "#b91c1c")};
+`;
+
 function toneForStatus(status: string): "ok" | "warn" | "error" {
   if (status === "completed") return "ok";
   if (status === "failed") return "error";
@@ -332,6 +348,16 @@ function mapVerifiedToForm(fields: Record<string, unknown>): FormData {
   };
 }
 
+function normalizeEditableDetails(payload: unknown): FormData {
+  const asRecord = (payload && typeof payload === "object") ? payload as Record<string, unknown> : {};
+  return {
+    name: firstString(asRecord, ["name"]),
+    scientific: firstString(asRecord, ["scientific"]),
+    location: firstString(asRecord, ["location"]),
+    date: firstString(asRecord, ["date"]),
+  };
+}
+
 export default function Digitalisation1() {
   const jobId = useMemo(() => {
     if (typeof window === "undefined") {
@@ -346,12 +372,19 @@ export default function Digitalisation1() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     name: "",
     scientific: "",
     location: "",
     date: "",
   });
+  const csrfToken = useMemo(
+    () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? "",
+    []
+  );
 
   useEffect(() => {
     if (!jobId) {
@@ -444,10 +477,18 @@ export default function Digitalisation1() {
   useEffect(() => {
     if (!selectedCard) {
       setFormData({ name: "", scientific: "", location: "", date: "" });
+      setSaveError(null);
+      setSaveSuccess(null);
       return;
     }
 
-    setFormData(mapVerifiedToForm(selectedCard.llm_verified ?? {}));
+    setFormData(
+      selectedCard.editable_details
+        ? normalizeEditableDetails(selectedCard.editable_details)
+        : mapVerifiedToForm(selectedCard.llm_verified ?? {})
+    );
+    setSaveError(null);
+    setSaveSuccess(null);
   }, [selectedCard]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -456,6 +497,69 @@ export default function Digitalisation1() {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (!jobId || !selectedCard) {
+      setSaveError("No image selected.");
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveError(null);
+    setSaveSuccess(null);
+
+    try {
+      const response = await fetch(
+        `/api/digitisation/jobs/${encodeURIComponent(jobId)}/images/${selectedCard.image_id}/details`,
+        {
+          method: "POST",
+          headers: {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            "X-CSRF-TOKEN": csrfToken,
+          },
+          credentials: "same-origin",
+          body: JSON.stringify(formData),
+        }
+      );
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload.message || "Failed to save image details.");
+      }
+
+      const nextEditable = normalizeEditableDetails(payload.editable_details);
+      const nextLlmVerified = (payload.llm_verified && typeof payload.llm_verified === "object")
+        ? payload.llm_verified as Record<string, unknown>
+        : selectedCard.llm_verified;
+
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          images: prev.images.map((img) =>
+            img.image_id === selectedCard.image_id
+              ? {
+                  ...img,
+                  editable_details: nextEditable,
+                  llm_verified: nextLlmVerified,
+                }
+              : img
+          ),
+        };
+      });
+
+      setFormData(nextEditable);
+      setSaveSuccess(payload.message || "Image details saved.");
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Failed to save image details.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -485,7 +589,12 @@ export default function Digitalisation1() {
           <LayoutGrid>
             <PreviewCard>
               <ImageStage>
-                {selectedCard ? (
+                {selectedCard?.preview_url ? (
+                  <StageImage
+                    src={selectedCard.preview_url}
+                    alt={selectedCard.original_filename}
+                  />
+                ) : selectedCard ? (
                   <PlaceholderText>{selectedCard.original_filename}</PlaceholderText>
                 ) : loading ? (
                   <PlaceholderText>Loading OCR Results</PlaceholderText>
@@ -514,13 +623,17 @@ export default function Digitalisation1() {
                   <span className="dot" />
                 </StatusText>
               </ValidationOverlay>
+
             </PreviewCard>
 
             <DetailsSidebar>
               <DetailsTitle>Details</DetailsTitle>
 
-              <Form onSubmit={(e) => e.preventDefault()}>
+              <Form onSubmit={handleSave}>
                 <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                  {saveSuccess ? <SaveMessage $tone="success">{saveSuccess}</SaveMessage> : null}
+                  {saveError ? <SaveMessage $tone="error">{saveError}</SaveMessage> : null}
+
                   <SelectWrap>
                     <label>Image</label>
                     <select
@@ -583,8 +696,8 @@ export default function Digitalisation1() {
                   </InputGroup>
                 </div>
 
-                <SaveButton type="submit" disabled={!selectedCard}>
-                  Edit & Save
+                <SaveButton type="submit" disabled={!selectedCard || isSaving}>
+                  {isSaving ? "Saving..." : "Edit & Save"}
                 </SaveButton>
               </Form>
             </DetailsSidebar>

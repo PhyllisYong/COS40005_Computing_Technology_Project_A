@@ -25,6 +25,10 @@ Route::post('/api/digitisation/jobs/{externalJobId}/submit', [DigitisationContro
     ->name('digitisation.jobs.submit');
 Route::get('/api/digitisation/jobs/{externalJobId}/ocr-results', [DigitisationController::class, 'ocrResults'])
     ->name('digitisation.jobs.ocr-results');
+Route::get('/api/digitisation/jobs/{externalJobId}/images/{imageId}/preview', [DigitisationController::class, 'imagePreview'])
+    ->name('digitisation.jobs.images.preview');
+Route::post('/api/digitisation/jobs/{externalJobId}/images/{imageId}/details', [DigitisationController::class, 'saveImageDetails'])
+    ->name('digitisation.jobs.images.details.save');
 
 // Result file proxy-download
 Route::get('/digitalisation/{job}/results/{filename}', [DigitisationResultController::class, 'download'])

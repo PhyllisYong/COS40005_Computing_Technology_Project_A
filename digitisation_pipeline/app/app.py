@@ -95,7 +95,11 @@ PIPELINE_ROOT = os.path.dirname(APP_DIR)
 PROJECT_ROOT = os.path.dirname(PIPELINE_ROOT)
 
 # Initialise pipeline ONCE
-llm = LLMVerifier()
+llm = LLMVerifier(
+    ollama_url=os.getenv("LLM_URL", "http://localhost:11434/api/generate"),
+    model_name=os.getenv("LLM_MODEL", "llama3:8b"),
+    timeout_seconds=int(os.getenv("LLM_TIMEOUT_SECONDS", "180")),
+)
 
 ner_model_path = os.path.join(PIPELINE_ROOT, "ner-models", "herbarium_ner_model-darwincore-gbif2")
 taxonomy_path = os.path.join(PIPELINE_ROOT, "resources", "gbif_records_database.json")

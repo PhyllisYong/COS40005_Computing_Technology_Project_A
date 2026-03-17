@@ -320,6 +320,11 @@ class DigitisationController extends Controller
             'ocr_status' => $job->ocr_status ?? 'pending',
             'ocr_progress_step' => $job->ocr_progress_step,
             'ocr_error_message' => $job->ocr_error_message,
+            'leafmachine_status' => $job->status ?? 'pending',
+            'leafmachine_progress_step' => $job->progress_step,
+            'leafmachine_started_at' => $job->started_at?->toIso8601String(),
+            'leafmachine_completed_at' => $job->completed_at?->toIso8601String(),
+            'leafmachine_failed_at' => $job->failed_at?->toIso8601String(),
             'images' => $images,
         ]);
     }

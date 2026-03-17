@@ -17,6 +17,11 @@ type OcrResultsResponse = {
   ocr_status: string;
   ocr_progress_step: string | null;
   ocr_error_message: string | null;
+  leafmachine_status: string;
+  leafmachine_progress_step: string | null;
+  leafmachine_started_at: string | null;
+  leafmachine_completed_at: string | null;
+  leafmachine_failed_at: string | null;
   images: OcrImageResult[];
 };
 
@@ -102,6 +107,35 @@ const StatusBadge = styled.span<{ $tone: "ok" | "warn" | "error" }>`
   letter-spacing: 0.04em;
   background: ${({ $tone }) => ($tone === "ok" ? "#dcfce7" : $tone === "error" ? "#fee2e2" : "#fef3c7")};
   color: ${({ $tone }) => ($tone === "ok" ? "#166534" : $tone === "error" ? "#991b1b" : "#92400e")};
+`;
+
+const ProgressWrap = styled.div`
+  width: 100%;
+  margin-top: 0.65rem;
+`;
+
+const ProgressTrack = styled.div`
+  width: 100%;
+  height: 0.55rem;
+  border-radius: 999px;
+  background: #e5e7eb;
+  overflow: hidden;
+`;
+
+const ProgressFill = styled.div<{ $percent: number; $tone: "ok" | "warn" | "error" }>`
+  width: ${({ $percent }) => `${Math.max(0, Math.min(100, $percent))}%`};
+  height: 100%;
+  transition: width 0.35s ease;
+  background: ${({ $tone }) => ($tone === "ok" ? "#16a34a" : $tone === "error" ? "#dc2626" : "#f59e0b")};
+`;
+
+const ProgressMeta = styled.div`
+  margin-top: 0.4rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: #6b7280;
 `;
 
 const LayoutGrid = styled.div`
@@ -325,6 +359,41 @@ function toneForStatus(status: string): "ok" | "warn" | "error" {
   return "warn";
 }
 
+function leafmachineProgressPercent(status: string, progressStep: string | null): number {
+  const s = (status || "").toLowerCase();
+  const step = (progressStep || "").toLowerCase();
+
+  if (s === "failed") return 100;
+  if (s === "completed") return 100;
+  if (s === "running") return 75;
+  if (s === "accepted") return 35;
+  if (s === "pending") return 10;
+
+  if (step.includes("submitted")) return 30;
+  if (step.includes("running")) return 75;
+  if (step.includes("completed")) return 100;
+  if (step.includes("failed")) return 100;
+
+  return 15;
+}
+
+function formatEta(startedAt: string | null, percent: number, status: string): string {
+  const s = (status || "").toLowerCase();
+  if (s === "completed") return "Completed";
+  if (s === "failed") return "Failed";
+  if (!startedAt || percent <= 0 || percent >= 100) return "ETA unavailable";
+
+  const startMs = Date.parse(startedAt);
+  if (Number.isNaN(startMs)) return "ETA unavailable";
+
+  const elapsedMs = Date.now() - startMs;
+  if (elapsedMs <= 0) return "ETA estimating...";
+
+  const remainingMs = (elapsedMs * (100 - percent)) / percent;
+  const remainingMin = Math.max(1, Math.round(remainingMs / 60000));
+  return `Approx. ${remainingMin} min remaining`;
+}
+
 function firstString(source: Record<string, unknown>, keys: string[]): string {
   for (const key of keys) {
     const value = source[key];
@@ -419,7 +488,7 @@ export default function Digitalisation1() {
         const typedPayload = payload as OcrResultsResponse;
         setData(typedPayload);
         setError(null);
-        return typedPayload.ocr_status;
+        return `${typedPayload.ocr_status}|${typedPayload.leafmachine_status}`;
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Failed to load OCR results.");
@@ -439,7 +508,10 @@ export default function Digitalisation1() {
         return;
       }
 
-      const shouldContinue = !status || (status !== "completed" && status !== "failed");
+      const [ocrState, leafState] = (status || "|").split("|");
+      const ocrTerminal = ocrState === "completed" || ocrState === "failed";
+      const leafTerminal = leafState === "completed" || leafState === "failed";
+      const shouldContinue = !status || !ocrTerminal || !leafTerminal;
 
       if (shouldContinue) {
         timerId = window.setTimeout(() => {
@@ -460,6 +532,11 @@ export default function Digitalisation1() {
 
   const cards = data?.images ?? [];
   const statusText = data?.ocr_status ?? "pending";
+  const leafmachineStatus = data?.leafmachine_status ?? "pending";
+  const leafmachineStep = data?.leafmachine_progress_step ?? null;
+  const leafmachineTone = toneForStatus(leafmachineStatus);
+  const leafmachineProgress = leafmachineProgressPercent(leafmachineStatus, leafmachineStep);
+  const leafmachineEta = formatEta(data?.leafmachine_started_at ?? null, leafmachineProgress, leafmachineStatus);
 
   useEffect(() => {
     if (cards.length === 0) {
@@ -580,7 +657,20 @@ export default function Digitalisation1() {
             <StatusBadge $tone={toneForStatus(statusText)}>
               OCR: {statusText}
             </StatusBadge>
+            <StatusBadge $tone={leafmachineTone}>
+              LeafMachine: {leafmachineStatus}
+            </StatusBadge>
             <div>{data?.ocr_progress_step ? `Step: ${data.ocr_progress_step}` : "Waiting for OCR callback..."}</div>
+
+            <ProgressWrap>
+              <ProgressTrack>
+                <ProgressFill $percent={leafmachineProgress} $tone={leafmachineTone} />
+              </ProgressTrack>
+              <ProgressMeta>
+                <span>{leafmachineStep ? `LeafMachine step: ${leafmachineStep}` : "LeafMachine step pending"}</span>
+                <span>{leafmachineEta}</span>
+              </ProgressMeta>
+            </ProgressWrap>
           </StatusPanel>
 
           {error ? <ErrorText>{error}</ErrorText> : null}

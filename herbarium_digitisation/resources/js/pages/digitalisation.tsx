@@ -641,7 +641,7 @@ export default function Digitalisation() {
           });
         }
 
-        router.visit('/digitalisation1');
+        router.visit(`/digitalisation1?job_id=${encodeURIComponent(currentJobId)}`);
       })
       .catch((error: unknown) => {
         setStatusMsg({

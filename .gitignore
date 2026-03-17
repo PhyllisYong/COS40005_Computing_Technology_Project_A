@@ -13,3 +13,5 @@ herbarium_digitisation/uploads
 image_quality_check/imagequality
 image_quality_check/.env
 image_quality_check/app/__pycache__
+digitisation_pipeline/.ocr-venv
+.vscode

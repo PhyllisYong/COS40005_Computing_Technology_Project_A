@@ -4,10 +4,11 @@ import numpy as np
 from PIL import Image, ImageDraw
 import pytesseract
 
-# i think i 
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+PIPELINE_ROOT = os.path.dirname(APP_DIR)
 
-TEXT_MODEL_PATH = "../weights/best_text_detection.pt"
-LINE_MODEL_PATH = "../weights/best_line_detection.pt"
+TEXT_MODEL_PATH = os.path.join(PIPELINE_ROOT, "weights", "best_text_detection.pt")
+LINE_MODEL_PATH = os.path.join(PIPELINE_ROOT, "weights", "best_line_detection.pt")
 
 CONF_THRESH = 0.65
 PAD = 1
@@ -15,7 +16,7 @@ PAD_X = 6
 
 TESS_CONFIG = "--oem 1 --psm 7"
 
-RESULTS_DIR = "../results_debug"
+RESULTS_DIR = os.path.join(PIPELINE_ROOT, "results_debug")
 
 
 class OCREngine:

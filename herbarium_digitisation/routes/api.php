@@ -2,8 +2,10 @@
 
 use App\Http\Controllers\Api\DigitisationJobCallbackController;
 use App\Http\Controllers\Api\ImageQualityCheckCallbackController;
+use App\Http\Controllers\Api\OcrJobCallbackController;
 use App\Http\Middleware\VerifyCallbackToken;
 use App\Http\Middleware\VerifyIqcCallbackToken;
+use App\Http\Middleware\VerifyOcrCallbackToken;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -29,4 +31,11 @@ Route::middleware(VerifyIqcCallbackToken::class)
     ->group(function () {
         Route::post('{jobId}/status', [ImageQualityCheckCallbackController::class, 'status'])
             ->name('iqc.callback.status');
+    });
+
+Route::middleware(VerifyOcrCallbackToken::class)
+    ->prefix('internal/ocr/jobs')
+    ->group(function () {
+        Route::post('{jobId}/status', [OcrJobCallbackController::class, 'status'])
+            ->name('ocr.callback.status');
     });

@@ -6,6 +6,7 @@ use App\Http\Requests\SubmitDigitisationJobRequest;
 use App\Jobs\DispatchImageQualityCheckJob;
 use App\Models\ExtractJob;
 use App\Services\LeafMachine2Service;
+use App\Services\OcrPipelineService;
 use App\Services\UploadStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,6 +21,7 @@ class DigitisationController extends Controller
     public function __construct(
         private readonly UploadStorageService $uploadStorage,
         private readonly LeafMachine2Service $lm2,
+        private readonly OcrPipelineService $ocr,
     ) {
     }
 
@@ -155,6 +157,9 @@ class DigitisationController extends Controller
             'job_id' => $job->external_job_id,
             'status' => $job->status,
             'iqc_status' => $job->iqc_status,
+            'ocr_status' => $job->ocr_status,
+            'ocr_progress_step' => $job->ocr_progress_step,
+            'ocr_error_message' => $job->ocr_error_message,
             'progress_step' => $job->progress_step,
             'accepted_images_count' => $job->accepted_images_count ?? 0,
             'rejected_images_count' => $job->rejected_images_count ?? 0,
@@ -222,87 +227,93 @@ class DigitisationController extends Controller
             ->values()
             ->all();
 
-        $this->lm2->submitStoredImages(
-            $job->external_job_id,
-            $job->job_name ?? 'Digitisation Run',
-            $acceptedImages,
-            $job->config_overrides ?? []
-        );
+        $errors = [];
+
+        try {
+            $this->ocr->submitStoredImages(
+                $job->external_job_id,
+                $acceptedImages
+            );
+
+            $job->update([
+                'ocr_status' => 'queued',
+                'ocr_progress_step' => 'ocr_queued',
+                'ocr_error_message' => null,
+                'ocr_started_at' => $job->ocr_started_at ?? now(),
+            ]);
+        } catch (Throwable $e) {
+            $errors[] = 'OCR submission failed: ' . $e->getMessage();
+
+            $job->update([
+                'ocr_status' => 'failed',
+                'ocr_progress_step' => 'ocr_submission_failed',
+                'ocr_error_message' => $e->getMessage(),
+                'ocr_failed_at' => now(),
+            ]);
+        }
+
+        try {
+            $this->lm2->submitStoredImages(
+                $job->external_job_id,
+                $job->job_name ?? 'Digitisation Run',
+                $acceptedImages,
+                $job->config_overrides ?? []
+            );
+        } catch (Throwable $e) {
+            $errors[] = 'LeafMachine submission failed: ' . $e->getMessage();
+        }
+
+        if ($errors !== []) {
+            return response()->json([
+                'message' => implode(' ', $errors),
+            ], 502);
+        }
 
         $job->update([
             'progress_step' => $rejectedNames !== []
-                ? 'quality_check_partial_pass_submitted'
-                : 'quality_check_pass_submitted',
+                ? 'quality_check_partial_pass_dual_submitted'
+                : 'quality_check_pass_dual_submitted',
         ]);
 
         return response()->json([
-            'message' => 'Accepted images submitted as one batch.',
+            'message' => 'Accepted images submitted to OCR and LeafMachine as one batch.',
             'submitted_images_count' => count($acceptedImages),
             'rejected_images' => $rejectedNames,
         ]);
     }
-    
-    public function submitOCR(SubmitOCRJobRequest $request)
+
+    /**
+     * Return OCR-specific result payload for the digitalisation1 page.
+     */
+    public function ocrResults(string $externalJobId): JsonResponse
     {
-        $request->validate([
-            'images.*' => 'required|image|max:10240', // multiple images
-            'run_name' => 'nullable|string|max:255',
-        ]);
+        $job = ExtractJob::with(['images' => fn($query) => $query->orderBy('image_id')])
+            ->where('external_job_id', $externalJobId)
+            ->first();
 
-        $user = $request->user();
-        $job_id = now()->format('Ymd_His') . '_' . Str::random(4);
-        $run_name = $request->input('run_name', 'Default Run');
-
-        $uploaded_paths = [];
-        foreach ($request->file('images') as $file) {
-            $path = $file->store("digitisation/{$user->id}/{$job_id}", 'public');
-            $uploaded_paths[] = $path;
+        if (!$job) {
+            return response()->json([
+                'message' => 'Digitisation job not found.',
+            ], 404);
         }
 
-        // Create job record
-        $job = DigitisationJob::create([
-            'user_id' => $user->id,
-            'job_id' => $job_id,
-            'run_name' => $run_name,
-            'status' => 'pending',
-            'output_path' => json_encode($uploaded_paths),
-        ]);
-
-        $python_api_url = config('services.ocr_pipeline.url'); // e.g., http://localhost:5000/process
-
-        $results = [];
-        foreach ($uploaded_paths as $path) {
-            $response = Http::attach(
-                'file', fopen(storage_path("app/public/{$path}"), 'r'), basename($path)
-            )->post($python_api_url, [
-                'job_id' => $job_id,
-            ]);
-
-            if ($response->successful()) {
-                $res = $response->json()['results'][0]; // single image
-                DigitisationResult::create([
-                    'digitisation_job_id' => $job->id,
-                    'record_index' => 0,
-                    'data' => $res,
-                ]);
-                $results[] = $res;
-            } else {
-                $job->update([
-                    'status' => 'failed',
-                    'error_message' => $response->body(),
-                ]);
-                return response()->json(['message' => 'OCR failed', 'error' => $response->body()], 500);
-            }
-        }
-
-        $job->update([
-            'status' => 'completed',
-            'results_imported_at' => now(),
-        ]);
+        $images = $job->images
+            ->filter(fn($image) => $image->accepted_for_submission === true && $image->iqc_decision === 'accept')
+            ->map(fn($image) => [
+                'image_id' => $image->image_id,
+                'original_filename' => $image->original_filename,
+                'stored_path' => $image->stored_path,
+                'ocr_status' => $image->ocr_status ?? 'pending',
+                'llm_verified' => $image->ocr_llm_verified ?? [],
+            ])
+            ->values();
 
         return response()->json([
-            'job_id' => $job_id,
-            'results' => $results,
+            'job_id' => $job->external_job_id,
+            'ocr_status' => $job->ocr_status ?? 'pending',
+            'ocr_progress_step' => $job->ocr_progress_step,
+            'ocr_error_message' => $job->ocr_error_message,
+            'images' => $images,
         ]);
     }
 }

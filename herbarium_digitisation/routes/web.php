@@ -23,6 +23,8 @@ Route::get('/api/digitisation/jobs/{externalJobId}/status', [DigitisationControl
     ->name('digitisation.jobs.status');
 Route::post('/api/digitisation/jobs/{externalJobId}/submit', [DigitisationController::class, 'submitAcceptedBatch'])
     ->name('digitisation.jobs.submit');
+Route::get('/api/digitisation/jobs/{externalJobId}/ocr-results', [DigitisationController::class, 'ocrResults'])
+    ->name('digitisation.jobs.ocr-results');
 
 // Result file proxy-download
 Route::get('/digitalisation/{job}/results/{filename}', [DigitisationResultController::class, 'download'])

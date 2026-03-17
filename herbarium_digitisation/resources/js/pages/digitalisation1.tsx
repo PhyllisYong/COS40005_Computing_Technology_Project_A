@@ -1,6 +1,29 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import styled, { keyframes } from "styled-components";
-import {AppSidebar} from '@/components/app-sidebar'; 
+import { AppSidebar } from "@/components/app-sidebar";
+
+type OcrImageResult = {
+  image_id: number;
+  original_filename: string;
+  stored_path: string;
+  ocr_status: string;
+  llm_verified: Record<string, unknown>;
+};
+
+type OcrResultsResponse = {
+  job_id: string;
+  ocr_status: string;
+  ocr_progress_step: string | null;
+  ocr_error_message: string | null;
+  images: OcrImageResult[];
+};
+
+type FormData = {
+  name: string;
+  scientific: string;
+  location: string;
+  date: string;
+};
 
 const pulse = keyframes`
   0% { transform: scale(1); opacity: 1; }
@@ -15,16 +38,15 @@ const PageContainer = styled.div`
 `;
 
 const MainContent = styled.main`
-  margin-left: 16rem; /* Sidebar width */
+  margin-left: 16rem;
   flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  overflow-y: auto;
+  min-height: 100vh;
 `;
 
 const ContentWrapper = styled.div`
-  max-width: 80rem;
+  max-width: 88rem;
   width: 100%;
   margin: 0 auto;
   padding: 0 2.5rem 2.5rem 2.5rem;
@@ -35,20 +57,49 @@ const ContentWrapper = styled.div`
 
 const Header = styled.header`
   padding: 1.5rem 0 2.5rem 0;
+
   h1 {
     font-size: 1.875rem;
     font-weight: 800;
     color: #4a6741;
     margin: 0;
   }
+
   p {
-    color: #9ca3af;
+    color: #6b7280;
     font-size: 0.75rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     font-weight: 700;
     margin-top: 0.25rem;
   }
+`;
+
+const StatusPanel = styled.section`
+  background: white;
+  border-radius: 1rem;
+  border: 1px solid #e5e7eb;
+  padding: 0.85rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+`;
+
+const StatusBadge = styled.span<{ $tone: "ok" | "warn" | "error" }>`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.4rem 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: ${({ $tone }) => ($tone === "ok" ? "#dcfce7" : $tone === "error" ? "#fee2e2" : "#fef3c7")};
+  color: ${({ $tone }) => ($tone === "ok" ? "#166534" : $tone === "error" ? "#991b1b" : "#92400e")};
 `;
 
 const LayoutGrid = styled.div`
@@ -58,8 +109,6 @@ const LayoutGrid = styled.div`
   min-height: 0;
   padding-bottom: 2rem;
 `;
-
-// --- UI Elements ---
 
 const PreviewCard = styled.div`
   flex: 1;
@@ -76,7 +125,7 @@ const ImageStage = styled.div`
   flex: 1;
   background: #fdfcf9;
   border: 1px solid #f9f9f7;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.02);
   border-radius: 1.25rem;
   overflow: hidden;
   display: flex;
@@ -103,12 +152,12 @@ const ValidationOverlay = styled.div`
   padding: 1rem;
   border-radius: 1.25rem;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-  min-width: 150px;
+  min-width: 160px;
   z-index: 10;
   text-align: right;
 `;
 
-const StatusText = styled.div`
+const StatusText = styled.div<{ $tone: "ok" | "warn" | "error" }>`
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
@@ -117,18 +166,20 @@ const StatusText = styled.div`
   justify-content: flex-end;
   gap: 0.5rem;
   color: #4b5563;
-  margin-top: 0.25rem;
+  margin-top: 0.3rem;
 
   .dot {
     width: 8px;
     height: 8px;
-    background: #22c55e;
+    background: ${({ $tone }) => ($tone === "ok" ? "#22c55e" : $tone === "error" ? "#ef4444" : "#f59e0b")};
     border-radius: 50%;
-    box-shadow: 0 0 8px #22c55e;
+    box-shadow: 0 0 8px ${({ $tone }) => ($tone === "ok" ? "#22c55e" : $tone === "error" ? "#ef4444" : "#f59e0b")};
     animation: ${pulse} 2s infinite ease-in-out;
   }
-  
-  .highlight { color: #16a34a; }
+
+  .highlight {
+    color: ${({ $tone }) => ($tone === "ok" ? "#16a34a" : $tone === "error" ? "#dc2626" : "#b45309")};
+  }
 `;
 
 const DetailsSidebar = styled.div`
@@ -149,7 +200,31 @@ const DetailsTitle = styled.h2`
   color: #9ca3af;
   text-transform: uppercase;
   letter-spacing: 0.3em;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
+`;
+
+const SelectWrap = styled.div`
+  margin-bottom: 1rem;
+
+  label {
+    display: block;
+    font-size: 10px;
+    font-weight: 800;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.25rem;
+  }
+
+  select {
+    width: 100%;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.6rem;
+    padding: 0.5rem 0.65rem;
+    font-size: 0.85rem;
+    color: #374151;
+    background: #fff;
+  }
 `;
 
 const Form = styled.form`
@@ -214,31 +289,179 @@ const SaveButton = styled.button`
     transform: translateY(-2px);
     box-shadow: 0 12px 20px -5px rgba(74, 103, 65, 0.4);
   }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
 `;
 
-export default function PlantDetails() {
-  const [formData, setFormData] = useState({
+const ErrorText = styled.p`
+  margin: 0;
+  color: #b91c1c;
+  font-size: 0.8rem;
+`;
+
+function toneForStatus(status: string): "ok" | "warn" | "error" {
+  if (status === "completed") return "ok";
+  if (status === "failed") return "error";
+  return "warn";
+}
+
+function firstString(source: Record<string, unknown>, keys: string[]): string {
+  for (const key of keys) {
+    const value = source[key];
+    if (value === null || value === undefined) continue;
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      const output = String(value).trim();
+      if (output.length > 0) {
+        return output;
+      }
+    }
+  }
+  return "";
+}
+
+function mapVerifiedToForm(fields: Record<string, unknown>): FormData {
+  return {
+    name: firstString(fields, ["specimen_name", "collector_name", "name"]),
+    scientific: firstString(fields, ["scientific_name", "taxon", "species"]),
+    location: firstString(fields, ["location", "locality", "country", "state"]),
+    date: firstString(fields, ["date_collected", "event_date", "date"]),
+  };
+}
+
+export default function Digitalisation1() {
+  const jobId = useMemo(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    return params.get("job_id");
+  }, []);
+
+  const [data, setData] = useState<OcrResultsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedImageId, setSelectedImageId] = useState<number | null>(null);
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     scientific: "",
     location: "",
-    date: ""
+    date: "",
   });
 
-  const sessionImage = null; 
+  useEffect(() => {
+    if (!jobId) {
+      setLoading(false);
+      setError("Missing job id. Return to Digitisation and submit a validated batch.");
+      return;
+    }
+
+    let cancelled = false;
+    let timerId: number | null = null;
+
+    const fetchResults = async (): Promise<string | null> => {
+      try {
+        const response = await fetch(`/api/digitisation/jobs/${encodeURIComponent(jobId)}/ocr-results`, {
+          headers: {
+            Accept: "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+          credentials: "same-origin",
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload.message || "Failed to load OCR results.");
+        }
+
+        if (cancelled) {
+          return null;
+        }
+
+        const typedPayload = payload as OcrResultsResponse;
+        setData(typedPayload);
+        setError(null);
+        return typedPayload.ocr_status;
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load OCR results.");
+        }
+        return null;
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    const poll = async () => {
+      const status = await fetchResults();
+
+      if (cancelled) {
+        return;
+      }
+
+      const shouldContinue = !status || (status !== "completed" && status !== "failed");
+
+      if (shouldContinue) {
+        timerId = window.setTimeout(() => {
+          void poll();
+        }, 4000);
+      }
+    };
+
+    void poll();
+
+    return () => {
+      cancelled = true;
+      if (timerId !== null) {
+        window.clearTimeout(timerId);
+      }
+    };
+  }, [jobId]);
+
+  const cards = data?.images ?? [];
+  const statusText = data?.ocr_status ?? "pending";
+
+  useEffect(() => {
+    if (cards.length === 0) {
+      setSelectedImageId(null);
+      return;
+    }
+
+    if (!cards.some((card) => card.image_id === selectedImageId)) {
+      setSelectedImageId(cards[0].image_id);
+    }
+  }, [cards, selectedImageId]);
+
+  const selectedCard = cards.find((card) => card.image_id === selectedImageId) ?? null;
+
+  useEffect(() => {
+    if (!selectedCard) {
+      setFormData({ name: "", scientific: "", location: "", date: "" });
+      return;
+    }
+
+    setFormData(mapVerifiedToForm(selectedCard.llm_verified ?? {}));
+  }, [selectedCard]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-
-    setFormData({ 
-      ...formData,      
-      [name]: value   
-    });
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
   return (
     <PageContainer>
       <AppSidebar />
-      
+
       <MainContent>
         <ContentWrapper>
           <Header>
@@ -246,81 +469,121 @@ export default function PlantDetails() {
             <p>Analyze and Save Specimen Data</p>
           </Header>
 
+          <StatusPanel>
+            <div>
+              <strong>Job:</strong> {jobId ?? "-"}
+            </div>
+            <StatusBadge $tone={toneForStatus(statusText)}>
+              OCR: {statusText}
+            </StatusBadge>
+            <div>{data?.ocr_progress_step ? `Step: ${data.ocr_progress_step}` : "Waiting for OCR callback..."}</div>
+          </StatusPanel>
+
+          {error ? <ErrorText>{error}</ErrorText> : null}
+          {!error && data?.ocr_error_message ? <ErrorText>{data.ocr_error_message}</ErrorText> : null}
+
           <LayoutGrid>
-            {/* Left: Image Preview Area */}
             <PreviewCard>
               <ImageStage>
-                {sessionImage ? (
-                  <img 
-                    src={sessionImage} 
-                    alt="Specimen preview" 
-                    style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain' }} 
-                  />
+                {selectedCard ? (
+                  <PlaceholderText>{selectedCard.original_filename}</PlaceholderText>
+                ) : loading ? (
+                  <PlaceholderText>Loading OCR Results</PlaceholderText>
                 ) : (
                   <PlaceholderText>No Image Selected</PlaceholderText>
                 )}
               </ImageStage>
 
               <ValidationOverlay>
-                <p style={{ fontSize: '9px', color: '#9ca3af', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '4px', borderBottom: '1px solid #f3f4f6', paddingBottom: '2px' }}>
-                  Validation
+                <p
+                  style={{
+                    fontSize: "9px",
+                    color: "#9ca3af",
+                    fontWeight: 800,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.1em",
+                    marginBottom: "4px",
+                    borderBottom: "1px solid #f3f4f6",
+                    paddingBottom: "2px",
+                  }}
+                >
+                  OCR Validation
                 </p>
-                <StatusText>
-                   Quality: <span className="highlight">Clear</span>
-                   <span className="dot" />
+                <StatusText $tone={toneForStatus(selectedCard?.ocr_status ?? statusText)}>
+                  Status: <span className="highlight">{selectedCard?.ocr_status ?? statusText}</span>
+                  <span className="dot" />
                 </StatusText>
-                <p style={{ fontSize: '10px', color: '#d1d5db', textTransform: 'uppercase', marginRight: '1.4rem' }}>Blurry</p>
               </ValidationOverlay>
             </PreviewCard>
 
-            {/* Right: Details Form */}
             <DetailsSidebar>
               <DetailsTitle>Details</DetailsTitle>
-              
+
               <Form onSubmit={(e) => e.preventDefault()}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+                  <SelectWrap>
+                    <label>Image</label>
+                    <select
+                      value={selectedImageId ?? ""}
+                      onChange={(e) => setSelectedImageId(Number(e.target.value))}
+                      disabled={cards.length === 0}
+                    >
+                      {cards.length === 0 ? <option value="">No OCR images yet</option> : null}
+                      {cards.map((card) => (
+                        <option key={card.image_id} value={card.image_id}>
+                          {card.original_filename}
+                        </option>
+                      ))}
+                    </select>
+                  </SelectWrap>
+
                   <InputGroup>
                     <label>Specimen Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       name="name"
-                      placeholder="Enter name..." 
+                      placeholder="Enter name..."
+                      value={formData.name}
                       onChange={handleInputChange}
                     />
                   </InputGroup>
 
                   <InputGroup>
                     <label>Scientific Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       name="scientific"
                       className="italic"
-                      placeholder="Genus species..." 
+                      placeholder="Genus species..."
+                      value={formData.scientific}
                       onChange={handleInputChange}
                     />
                   </InputGroup>
 
                   <InputGroup>
                     <label>Location Found</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       name="location"
-                      placeholder="GPS or Site Name..." 
+                      placeholder="GPS or Site Name..."
+                      value={formData.location}
                       onChange={handleInputChange}
                     />
                   </InputGroup>
 
                   <InputGroup>
                     <label>Date Collected</label>
-                    <input 
-                      type="date" 
+                    <input
+                      type="text"
                       name="date"
+                      placeholder="YYYY-MM-DD"
+                      value={formData.date}
                       onChange={handleInputChange}
                     />
                   </InputGroup>
                 </div>
 
-                <SaveButton type="submit">
+                <SaveButton type="submit" disabled={!selectedCard}>
                   Edit & Save
                 </SaveButton>
               </Form>

@@ -1,7 +1,11 @@
 import requests
 import json
-import chromadb
-from chromadb.utils import embedding_functions
+try:
+    import chromadb  # type: ignore[import-not-found]
+    from chromadb.utils import embedding_functions  # type: ignore[import-not-found]
+except Exception:
+    chromadb = None
+    embedding_functions = None
 
 class LLMVerifier:
     """
@@ -12,6 +16,144 @@ class LLMVerifier:
         self.OLLAMA_URL = ollama_url
         self.MODEL_NAME = model_name
         self.TIMEOUT_SECONDS = timeout_seconds
+        self._rag_status_logged = False
+        self._rag_reason = "not_initialized"
+
+        # Retrieval is optional. If vector DB init fails, verifier still runs with LLM-only mode.
+        self.collection = None
+        try:
+            if chromadb is None or embedding_functions is None:
+                raise RuntimeError("chromadb is not installed")
+
+            self.client = chromadb.PersistentClient(path="./gbif_vector_db")
+            embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name="all-mpnet-base-v2"
+            )
+            self.collection = self.client.get_collection(
+                name="gbif_botanical_records",
+                embedding_function=embedding_function,
+            )
+            self._rag_reason = "ok"
+        except Exception as exc:
+            self._rag_reason = str(exc)
+            print(f"LLMVerifier retrieval disabled: {exc}")
+
+    def rag_status(self) -> dict:
+        """
+        Returns a lightweight RAG health snapshot.
+        """
+        return {
+            "running": self.collection is not None,
+            "reason": self._rag_reason,
+        }
+
+    @staticmethod
+    def _truncate_text(value: str, max_chars: int) -> str:
+        if len(value) <= max_chars:
+            return value
+        return value[:max_chars] + "\n...[truncated]"
+
+    def _build_prompt(self, ocr_text: str, ner_output: dict, retrieved_context: str, field_context: dict) -> str:
+        trimmed_ocr = self._truncate_text(ocr_text, 6000)
+        trimmed_retrieved = self._truncate_text(retrieved_context, 5000)
+
+        compact_field_context = {}
+        for key, docs in field_context.items():
+            joined = "\n".join([str(doc) for doc in (docs or [])])
+            compact_field_context[key] = self._truncate_text(joined, 1000)
+
+        return f"""
+            You are a botanist verifying structured data extracted from a herbarium label.
+            Your job is to check whether each extracted field correctly matches the OCR text.
+
+            You may use the following reference knowledge:
+
+            {trimmed_retrieved}.
+
+            Field-specific reference knowledge:
+
+            Family:
+            {compact_field_context.get("family", "")}
+
+            Genus:
+            {compact_field_context.get("genus", "")}
+
+            Species:
+            {compact_field_context.get("species", "")}
+
+            Location:
+            {compact_field_context.get("location", "")}
+
+            Collector:
+            {compact_field_context.get("collector", "")}
+
+            Original OCR text:
+            {trimmed_ocr}
+
+            Extracted data:
+            {json.dumps(ner_output, indent=2)}
+
+            For EACH field:
+
+            1. Check if the value appears in the OCR text.
+            2. Determine if the label type is correct (species, location, coordinates, etc).
+            3. Detect OCR mistakes.
+            4. Suggest corrections ONLY if necessary.
+
+            IMPORTANT RULES:
+            - Do NOT invent information.
+            - Do NOT swap fields unless clearly incorrect.
+            - Coordinates must contain degrees (°).
+            - Elevation must contain "m" or "meters".
+            - Species must follow botanical binomial format.
+
+            Return JSON ONLY in this format:
+
+            {{
+            "field_validation": {{
+            "species": {{"correct": true/false, "original": "","suggestion": ""}},
+            "genus": {{"correct": true/false, "original": "","suggestion": ""}},
+            "family": {{"correct": true/false, "original": "","suggestion": ""}},
+            "country": {{"correct": true/false, "original": "","suggestion": ""}},
+            "region": {{"correct": true/false, "original": "","suggestion": ""}},
+
+            "locality": {{"correct": true/false, "original": "","suggestion": ""}},
+            "elevation": {{"correct": true/false, "original": "","suggestion": ""}},
+            "coordinates": {{"correct": true/false, "original": "","suggestion": ""}},
+            "institution": {{"correct": true/false, "original": "","suggestion": ""}}
+            }},
+            "confidence": 0-1
+            }}
+            """
+
+    @staticmethod
+    def _build_fallback_prompt(ocr_text: str, ner_output: dict) -> str:
+        trimmed_ocr = ocr_text[:4000]
+        return f"""
+            Verify the extracted herbarium fields against OCR text and return JSON only.
+
+            OCR:
+            {trimmed_ocr}
+
+            Extracted:
+            {json.dumps(ner_output, indent=2)}
+
+            Required schema:
+            {{
+              "field_validation": {{
+                "species": {{"correct": true/false, "original": "", "suggestion": ""}},
+                "genus": {{"correct": true/false, "original": "", "suggestion": ""}},
+                "family": {{"correct": true/false, "original": "", "suggestion": ""}},
+                "country": {{"correct": true/false, "original": "", "suggestion": ""}},
+                "region": {{"correct": true/false, "original": "", "suggestion": ""}},
+                "locality": {{"correct": true/false, "original": "", "suggestion": ""}},
+                "elevation": {{"correct": true/false, "original": "", "suggestion": ""}},
+                "coordinates": {{"correct": true/false, "original": "", "suggestion": ""}},
+                "institution": {{"correct": true/false, "original": "", "suggestion": ""}}
+              }},
+              "confidence": 0-1
+            }}
+            """
 
     @staticmethod
     def _extract_json_payload(api_payload: dict) -> dict:
@@ -43,16 +185,10 @@ class LLMVerifier:
 
         return {}
 
-        
-        self.client = chromadb.PersistentClient(path="./gbif_vector_db")
-
-        
-        embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name="all-mpnet-base-v2"
-        )
-        self.collection = self.client.get_collection(name="gbif_botanical_records", embedding_function=embedding_function)
-
     def retrieve_context(self, query_text: str, top_k: int = 5):
+        if self.collection is None:
+            return ""
+
         results = self.collection.query(
             query_texts=[query_text],
             n_results=top_k
@@ -69,6 +205,9 @@ class LLMVerifier:
         return "\n\n".join(context_chunks)
 
     def retrieve_per_field(self, ner_output: dict):
+        if self.collection is None:
+            return {}
+
         contexts = {}
 
         for field, value in ner_output.items():
@@ -95,7 +234,13 @@ class LLMVerifier:
         - dict: field_validation results with corrections
         """
 
-            # 🔍 Build a query for retrieval
+        # Log RAG health once so runtime clearly shows if retrieval is active.
+        if not self._rag_status_logged:
+            status = self.rag_status()
+            print(f"RAG status: running={status['running']} reason={status['reason']}")
+            self._rag_status_logged = True
+
+        # 🔍 Build a query for retrieval
         query = ocr_text
 
         # 🔍 Get context from ChromaDB
@@ -103,91 +248,44 @@ class LLMVerifier:
         field_context = self.retrieve_per_field(ner_output)
             
 
-        prompt = f"""
-            You are a botanist verifying structured data extracted from a herbarium label.
-            Your job is to check whether each extracted field correctly matches the OCR text.
-
-            You may use the following reference knowledge:
-
-            {retrieved_context}.
-
-            Field-specific reference knowledge:
-
-            Family:
-            {field_context.get("family", [])}
-
-            Genus:
-            {field_context.get("genus", [])}
-
-            Species:
-            {field_context.get("species", [])}
-
-            Location:
-            {field_context.get("location", [])}
-
-            Collector:
-            {field_context.get("collector", [])}
-
-            Original OCR text:
-            {ocr_text}
-
-            Extracted data:
-            {json.dumps(ner_output, indent=2)}
-
-            For EACH field:
-
-            1. Check if the value appears in the OCR text.
-            2. Determine if the label type is correct (species, location, coordinates, etc).
-            3. Detect OCR mistakes.
-            4. Suggest corrections ONLY if necessary.
-
-            IMPORTANT RULES:
-            - Do NOT invent information.
-            - Do NOT swap fields unless clearly incorrect.
-            - Coordinates must contain degrees (°).
-            - Elevation must contain "m" or "meters".
-            - Species must follow botanical binomial format.
-
-            Return JSON ONLY in this format:
-
-            {{
-            "field_validation": {{
-            "species": {{"correct": true/false, "original": "","suggestion": ""}},
-            "genus": {{"correct": true/false, "original": "","suggestion": ""}},
-            "family": {{"correct": true/false, "original": "","suggestion": ""}},
-            "country": {{"correct": true/false, "original": "","suggestion": ""}},
-            "region": {{"correct": true/false, "original": "","suggestion": ""}},
-            
-            "locality": {{"correct": true/false, "original": "","suggestion": ""}},
-            "elevation": {{"correct": true/false, "original": "","suggestion": ""}},
-            "coordinates": {{"correct": true/false, "original": "","suggestion": ""}},
-            "institution": {{"correct": true/false, "original": "","suggestion": ""}}
-            }},
-            "confidence": 0-1
-            }}
-            """
+        prompt = self._build_prompt(ocr_text, ner_output, retrieved_context, field_context)
 
         try:
-            response = requests.post(
-                self.OLLAMA_URL,
-                json={
-                    "model": self.MODEL_NAME,
-                    "prompt": prompt,
-                    "stream": False,
-                    "format": "json",
-                    "options": {"temperature": 0.1},
-                },
-                timeout=self.TIMEOUT_SECONDS,
-            )
-            response.raise_for_status()
+            for attempt in range(2):
+                current_prompt = prompt if attempt == 0 else self._build_fallback_prompt(ocr_text, ner_output)
+                response = requests.post(
+                    self.OLLAMA_URL,
+                    json={
+                        "model": self.MODEL_NAME,
+                        "prompt": current_prompt,
+                        "stream": False,
+                        "format": "json",
+                        "options": {"temperature": 0.1},
+                    },
+                    timeout=self.TIMEOUT_SECONDS,
+                )
 
-            api_payload = response.json()
-            result_json = self._extract_json_payload(api_payload)
-            if not result_json:
-                print(f"LLM verification warning: unexpected response shape from {self.OLLAMA_URL}: {api_payload}")
-            return result_json
+                if response.status_code >= 500 and attempt == 0:
+                    print("LLM verification warning: server returned 5xx, retrying with fallback prompt")
+                    continue
+
+                response.raise_for_status()
+
+                api_payload = response.json()
+                result_json = self._extract_json_payload(api_payload)
+                if not result_json:
+                    print(f"LLM verification warning: unexpected response shape from {self.OLLAMA_URL}: {api_payload}")
+                return result_json
+
+            return {}
         except Exception as e:
-            print("LLM verification failed:", e)
+            response_body = ""
+            if isinstance(e, requests.HTTPError) and e.response is not None:
+                response_body = e.response.text[:400]
+            if response_body:
+                print("LLM verification failed:", e, "body:", response_body)
+            else:
+                print("LLM verification failed:", e)
             return {}
 
 

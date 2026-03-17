@@ -9,7 +9,7 @@ type OcrImageResult = {
   preview_url?: string;
   ocr_status: string;
   llm_verified: Record<string, unknown>;
-  editable_details?: FormData;
+  editable_details?: EditableDetails;
 };
 
 type OcrResultsResponse = {
@@ -25,12 +25,7 @@ type OcrResultsResponse = {
   images: OcrImageResult[];
 };
 
-type FormData = {
-  name: string;
-  scientific: string;
-  location: string;
-  date: string;
-};
+type EditableDetails = Record<string, string>;
 
 const pulse = keyframes`
   0% { transform: scale(1); opacity: 1; }
@@ -394,37 +389,30 @@ function formatEta(startedAt: string | null, percent: number, status: string): s
   return `Approx. ${remainingMin} min remaining`;
 }
 
-function firstString(source: Record<string, unknown>, keys: string[]): string {
-  for (const key of keys) {
-    const value = source[key];
-    if (value === null || value === undefined) continue;
+function normalizeEditableDetails(payload: unknown): EditableDetails {
+  const asRecord = (payload && typeof payload === "object") ? payload as Record<string, unknown> : {};
+  const output: EditableDetails = {};
+
+  for (const [key, value] of Object.entries(asRecord)) {
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-      const output = String(value).trim();
-      if (output.length > 0) {
-        return output;
-      }
+      output[key] = String(value);
+    } else if (Array.isArray(value)) {
+      output[key] = value
+        .map((item) => (typeof item === "string" || typeof item === "number" || typeof item === "boolean") ? String(item) : "")
+        .filter((item) => item !== "")
+        .join(", ");
+    } else {
+      output[key] = "";
     }
   }
-  return "";
+
+  return output;
 }
 
-function mapVerifiedToForm(fields: Record<string, unknown>): FormData {
-  return {
-    name: firstString(fields, ["specimen_name", "collector_name", "name"]),
-    scientific: firstString(fields, ["scientific_name", "taxon", "species"]),
-    location: firstString(fields, ["location", "locality", "country", "state"]),
-    date: firstString(fields, ["date_collected", "event_date", "date"]),
-  };
-}
-
-function normalizeEditableDetails(payload: unknown): FormData {
-  const asRecord = (payload && typeof payload === "object") ? payload as Record<string, unknown> : {};
-  return {
-    name: firstString(asRecord, ["name"]),
-    scientific: firstString(asRecord, ["scientific"]),
-    location: firstString(asRecord, ["location"]),
-    date: firstString(asRecord, ["date"]),
-  };
+function labelizeField(key: string): string {
+  return key
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 export default function Digitalisation1() {
@@ -444,12 +432,7 @@ export default function Digitalisation1() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
-  const [formData, setFormData] = useState<FormData>({
-    name: "",
-    scientific: "",
-    location: "",
-    date: "",
-  });
+  const [formData, setFormData] = useState<EditableDetails>({});
   const csrfToken = useMemo(
     () => document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? "",
     []
@@ -553,7 +536,7 @@ export default function Digitalisation1() {
 
   useEffect(() => {
     if (!selectedCard) {
-      setFormData({ name: "", scientific: "", location: "", date: "" });
+      setFormData({});
       setSaveError(null);
       setSaveSuccess(null);
       return;
@@ -562,7 +545,7 @@ export default function Digitalisation1() {
     setFormData(
       selectedCard.editable_details
         ? normalizeEditableDetails(selectedCard.editable_details)
-        : mapVerifiedToForm(selectedCard.llm_verified ?? {})
+        : {}
     );
     setSaveError(null);
     setSaveSuccess(null);
@@ -600,7 +583,7 @@ export default function Digitalisation1() {
             "X-CSRF-TOKEN": csrfToken,
           },
           credentials: "same-origin",
-          body: JSON.stringify(formData),
+          body: JSON.stringify({ editable_details: formData }),
         }
       );
 
@@ -740,50 +723,22 @@ export default function Digitalisation1() {
                     </select>
                   </SelectWrap>
 
-                  <InputGroup>
-                    <label>Specimen Name</label>
-                    <input
-                      type="text"
-                      name="name"
-                      placeholder="Enter name..."
-                      value={formData.name}
-                      onChange={handleInputChange}
-                    />
-                  </InputGroup>
-
-                  <InputGroup>
-                    <label>Scientific Name</label>
-                    <input
-                      type="text"
-                      name="scientific"
-                      className="italic"
-                      placeholder="Genus species..."
-                      value={formData.scientific}
-                      onChange={handleInputChange}
-                    />
-                  </InputGroup>
-
-                  <InputGroup>
-                    <label>Location Found</label>
-                    <input
-                      type="text"
-                      name="location"
-                      placeholder="GPS or Site Name..."
-                      value={formData.location}
-                      onChange={handleInputChange}
-                    />
-                  </InputGroup>
-
-                  <InputGroup>
-                    <label>Date Collected</label>
-                    <input
-                      type="text"
-                      name="date"
-                      placeholder="YYYY-MM-DD"
-                      value={formData.date}
-                      onChange={handleInputChange}
-                    />
-                  </InputGroup>
+                  {Object.keys(formData).length === 0 ? (
+                    <ErrorText>No resolved LLM fields available yet for this image.</ErrorText>
+                  ) : (
+                    Object.entries(formData).map(([fieldKey, fieldValue]) => (
+                      <InputGroup key={fieldKey}>
+                        <label>{labelizeField(fieldKey)}</label>
+                        <input
+                          type="text"
+                          name={fieldKey}
+                          placeholder={`Enter ${labelizeField(fieldKey)}...`}
+                          value={fieldValue}
+                          onChange={handleInputChange}
+                        />
+                      </InputGroup>
+                    ))
+                  )}
                 </div>
 
                 <SaveButton type="submit" disabled={!selectedCard || isSaving}>

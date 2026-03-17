@@ -367,10 +367,7 @@ class DigitisationController extends Controller
     public function saveImageDetails(string $externalJobId, int $imageId, Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'name' => ['nullable', 'string', 'max:255'],
-            'scientific' => ['nullable', 'string', 'max:255'],
-            'location' => ['nullable', 'string', 'max:255'],
-            'date' => ['nullable', 'string', 'max:255'],
+            'editable_details' => ['required', 'array'],
         ]);
 
         if ($validator->fails()) {
@@ -395,7 +392,10 @@ class DigitisationController extends Controller
             ], 404);
         }
 
-        $editable = $this->normalizeEditableDetails($validator->validated());
+        $validated = $validator->validated();
+        $editable = $this->normalizeEditableDetails(
+            is_array($validated['editable_details'] ?? null) ? $validated['editable_details'] : []
+        );
         $current = is_array($image->ocr_llm_verified) ? $image->ocr_llm_verified : [];
         $current['edited_details'] = $editable;
 
@@ -413,12 +413,22 @@ class DigitisationController extends Controller
 
     private function normalizeEditableDetails(array $input): array
     {
-        return [
-            'name' => trim((string) ($input['name'] ?? '')),
-            'scientific' => trim((string) ($input['scientific'] ?? '')),
-            'location' => trim((string) ($input['location'] ?? '')),
-            'date' => trim((string) ($input['date'] ?? '')),
-        ];
+        $normalized = [];
+
+        foreach ($input as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            $safeKey = trim($key);
+            if ($safeKey === '') {
+                continue;
+            }
+
+            $normalized[$safeKey] = $this->normalizeScalarString($value);
+        }
+
+        return $normalized;
     }
 
     private function extractEditableDetails(array $llmVerified): array
@@ -432,50 +442,72 @@ class DigitisationController extends Controller
             $fieldValidation = $llmVerified['field_validation'];
         }
 
-        $scientific = $this->pickFieldValue($fieldValidation, 'species')
-            ?: $this->pickAnyString($llmVerified, ['scientific_name', 'taxon', 'species']);
-
-        $location = $this->pickFieldValue($fieldValidation, 'locality')
-            ?: $this->pickFieldValue($fieldValidation, 'municipality')
-            ?: $this->pickFieldValue($fieldValidation, 'region')
-            ?: $this->pickFieldValue($fieldValidation, 'country')
-            ?: $this->pickAnyString($llmVerified, ['location', 'locality', 'country', 'state']);
-
-        return [
-            'name' => $this->pickAnyString($llmVerified, ['specimen_name', 'collector_name', 'name']),
-            'scientific' => $scientific,
-            'location' => $location,
-            'date' => $this->pickAnyString($llmVerified, ['date_collected', 'event_date', 'date']),
-        ];
-    }
-
-    private function pickFieldValue(array $fieldValidation, string $field): string
-    {
-        $value = $fieldValidation[$field] ?? null;
-        if (!is_array($value)) {
-            return '';
-        }
-
-        $suggestion = trim((string) ($value['suggestion'] ?? ''));
-        if ($suggestion !== '') {
-            return $suggestion;
-        }
-
-        return trim((string) ($value['original'] ?? ''));
-    }
-
-    private function pickAnyString(array $source, array $keys): string
-    {
-        foreach ($keys as $key) {
-            if (!array_key_exists($key, $source)) {
+        $resolved = [];
+        foreach ($fieldValidation as $field => $payload) {
+            if (!is_string($field)) {
                 continue;
             }
 
-            $value = $source[$key];
-            if (is_string($value) || is_numeric($value) || is_bool($value)) {
-                $output = trim((string) $value);
-                if ($output !== '') {
-                    return $output;
+            if (!is_array($payload)) {
+                continue;
+            }
+
+            $resolved[$field] = $this->resolveFieldValue($payload);
+        }
+
+        if ($resolved !== []) {
+            return $resolved;
+        }
+
+        // Fallback when no field_validation object exists.
+        $fallback = [];
+        foreach ($llmVerified as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            if (is_scalar($value) || is_array($value)) {
+                $fallback[$key] = $this->normalizeScalarString($value);
+            }
+        }
+
+        return $fallback;
+    }
+
+    private function resolveFieldValue(array $fieldPayload): string
+    {
+        $correct = filter_var($fieldPayload['correct'] ?? null, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $original = $this->normalizeScalarString($fieldPayload['original'] ?? null);
+        $suggestion = $this->normalizeScalarString($fieldPayload['suggestion'] ?? null);
+
+        // Requested rule: correct=true => original, correct=false => suggestion.
+        if ($correct === true) {
+            return $original;
+        }
+
+        if ($correct === false) {
+            return $suggestion !== '' ? $suggestion : $original;
+        }
+
+        // If model omitted/invalid correct flag, prefer suggestion when present.
+        return $suggestion !== '' ? $suggestion : $original;
+    }
+
+    private function normalizeScalarString(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_string($value) || is_numeric($value) || is_bool($value)) {
+            return trim((string) $value);
+        }
+
+        if (is_array($value)) {
+            // Keep first scalar item when LLM returns array-like suggestions.
+            foreach ($value as $item) {
+                if (is_string($item) || is_numeric($item) || is_bool($item)) {
+                    return trim((string) $item);
                 }
             }
         }

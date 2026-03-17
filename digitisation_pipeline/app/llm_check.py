@@ -1,5 +1,7 @@
 import requests
 import json
+import chromadb
+from chromadb.utils import embedding_functions
 
 class LLMVerifier:
     """
@@ -41,6 +43,45 @@ class LLMVerifier:
 
         return {}
 
+        
+        self.client = chromadb.PersistentClient(path="./gbif_vector_db")
+
+        
+        embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name="all-mpnet-base-v2"
+        )
+        self.collection = self.client.get_collection(name="gbif_botanical_records", embedding_function=embedding_function)
+
+    def retrieve_context(self, query_text: str, top_k: int = 5):
+        results = self.collection.query(
+            query_texts=[query_text],
+            n_results=top_k
+        )
+
+        documents = results.get("documents", [[]])[0]
+        distances = results.get("distances", [[]])[0]
+
+        # Optional: pair doc + score (VERY useful for debugging)
+        context_chunks = []
+        for doc, dist in zip(documents, distances):
+            context_chunks.append(f"[score={dist:.4f}] {doc}")
+
+        return "\n\n".join(context_chunks)
+
+    def retrieve_per_field(self, ner_output: dict):
+        contexts = {}
+
+        for field, value in ner_output.items():
+            if value:
+                results = self.collection.query(
+                    query_texts=[f"{field}: {value}"],
+                    n_results=2
+                )
+                docs = results.get("documents", [[]])[0]
+                contexts[field] = docs
+
+        return contexts
+
     def verify(self, ocr_text: str, ner_output: dict) -> dict:
         """
         Sends OCR text and NER-extracted labels to the local LLM
@@ -54,10 +95,38 @@ class LLMVerifier:
         - dict: field_validation results with corrections
         """
 
+            # 🔍 Build a query for retrieval
+        query = ocr_text
+
+        # 🔍 Get context from ChromaDB
+        retrieved_context = self.retrieve_context(query)
+        field_context = self.retrieve_per_field(ner_output)
+            
+
         prompt = f"""
             You are a botanist verifying structured data extracted from a herbarium label.
-
             Your job is to check whether each extracted field correctly matches the OCR text.
+
+            You may use the following reference knowledge:
+
+            {retrieved_context}.
+
+            Field-specific reference knowledge:
+
+            Family:
+            {field_context.get("family", [])}
+
+            Genus:
+            {field_context.get("genus", [])}
+
+            Species:
+            {field_context.get("species", [])}
+
+            Location:
+            {field_context.get("location", [])}
+
+            Collector:
+            {field_context.get("collector", [])}
 
             Original OCR text:
             {ocr_text}
@@ -84,9 +153,11 @@ class LLMVerifier:
             {{
             "field_validation": {{
             "species": {{"correct": true/false, "original": "","suggestion": ""}},
+            "genus": {{"correct": true/false, "original": "","suggestion": ""}},
+            "family": {{"correct": true/false, "original": "","suggestion": ""}},
             "country": {{"correct": true/false, "original": "","suggestion": ""}},
             "region": {{"correct": true/false, "original": "","suggestion": ""}},
-            "municipality": {{"correct": true/false, "original": "","suggestion": ""}},
+            
             "locality": {{"correct": true/false, "original": "","suggestion": ""}},
             "elevation": {{"correct": true/false, "original": "","suggestion": ""}},
             "coordinates": {{"correct": true/false, "original": "","suggestion": ""}},

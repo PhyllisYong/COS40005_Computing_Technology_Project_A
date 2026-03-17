@@ -7,6 +7,9 @@ digitisation_pipeline/ocr-env
 digitisation_pipeline/ner-models
 digitisation_pipeline/results
 digitisation_pipeline/results_debug
+digitisation_pipeline/ocr-env
+digitisation_pipeline/app/gbif_vector_db
+
 digitisation_pipeline/ner-models
 digitisation_pipeline/__pycache__
 herbarium_digitisation/uploads
@@ -15,4 +18,6 @@ image_quality_check/.env
 image_quality_check/iqc-env
 image_quality_check/app/__pycache__
 digitisation_pipeline/ocr-venv
+image_quality_check/iqc-env
+image_quality_check/app/__pycache__
 .vscode

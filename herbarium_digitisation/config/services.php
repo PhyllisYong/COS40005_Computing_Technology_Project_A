@@ -69,4 +69,18 @@ return [
         'uploads_dir'    => env('DIGITISATION_UPLOADS_DIR', base_path('uploads')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | OCR Pipeline Microservice
+    |--------------------------------------------------------------------------
+    |
+    | OCR extraction pipeline used after IQC is accepted. Laravel submits the
+    | accepted images and receives asynchronous callbacks with per-image
+    | llm_verified fields.
+    |
+    */
+    'ocr_pipeline' => [
+        'url' => env('OCR_PIPELINE_URL', 'http://127.0.0.1:8002'),
+    ],
+
 ];

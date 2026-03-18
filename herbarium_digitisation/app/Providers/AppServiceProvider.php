@@ -8,6 +8,8 @@ use App\Services\DigitisationJobStateService;
 use App\Services\ImageQualityCheckService;
 use App\Services\ImageQualityCheckStateService;
 use App\Services\LeafMachine2Service;
+use App\Services\OcrJobStateService;
+use App\Services\OcrPipelineService;
 use App\Services\ResultProcessingService;
 use App\Services\UploadStorageService;
 use Carbon\CarbonImmutable;
@@ -35,6 +37,10 @@ class AppServiceProvider extends ServiceProvider
         // IQC HTTP client and state service
         $this->app->singleton(ImageQualityCheckService::class);
         $this->app->singleton(ImageQualityCheckStateService::class);
+
+        // OCR HTTP client and callback state service
+        $this->app->singleton(OcrPipelineService::class);
+        $this->app->singleton(OcrJobStateService::class);
 
         // ResultProcessingService depends on LeafMachine2Service
         $this->app->singleton(ResultProcessingService::class, function ($app) {

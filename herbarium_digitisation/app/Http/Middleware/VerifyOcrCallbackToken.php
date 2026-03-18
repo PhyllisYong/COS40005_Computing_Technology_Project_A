@@ -7,14 +7,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
-class VerifyCallbackToken
+class VerifyOcrCallbackToken
 {
     /**
      * Service auth disabled for local development.
      */
     public function handle(Request $request, Closure $next): Response
     {
-        Log::debug('VerifyCallbackToken: service auth is disabled; callback accepted.', [
+        Log::debug('VerifyOcrCallbackToken: service auth is disabled; callback accepted.', [
             'ip' => $request->ip(),
         ]);
 

@@ -6,10 +6,13 @@ use App\Http\Requests\SubmitDigitisationJobRequest;
 use App\Jobs\DispatchImageQualityCheckJob;
 use App\Models\ExtractJob;
 use App\Services\LeafMachine2Service;
+use App\Services\OcrPipelineService;
 use App\Services\UploadStorageService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -20,6 +23,7 @@ class DigitisationController extends Controller
     public function __construct(
         private readonly UploadStorageService $uploadStorage,
         private readonly LeafMachine2Service $lm2,
+        private readonly OcrPipelineService $ocr,
     ) {
     }
 
@@ -155,6 +159,9 @@ class DigitisationController extends Controller
             'job_id' => $job->external_job_id,
             'status' => $job->status,
             'iqc_status' => $job->iqc_status,
+            'ocr_status' => $job->ocr_status,
+            'ocr_progress_step' => $job->ocr_progress_step,
+            'ocr_error_message' => $job->ocr_error_message,
             'progress_step' => $job->progress_step,
             'accepted_images_count' => $job->accepted_images_count ?? 0,
             'rejected_images_count' => $job->rejected_images_count ?? 0,
@@ -222,87 +229,289 @@ class DigitisationController extends Controller
             ->values()
             ->all();
 
-        $this->lm2->submitStoredImages(
-            $job->external_job_id,
-            $job->job_name ?? 'Digitisation Run',
-            $acceptedImages,
-            $job->config_overrides ?? []
-        );
+        $errors = [];
+
+        try {
+            $this->ocr->submitStoredImages(
+                $job->external_job_id,
+                $acceptedImages
+            );
+
+            $job->update([
+                'ocr_status' => 'queued',
+                'ocr_progress_step' => 'ocr_queued',
+                'ocr_error_message' => null,
+                'ocr_started_at' => $job->ocr_started_at ?? now(),
+            ]);
+        } catch (Throwable $e) {
+            $errors[] = 'OCR submission failed: ' . $e->getMessage();
+
+            $job->update([
+                'ocr_status' => 'failed',
+                'ocr_progress_step' => 'ocr_submission_failed',
+                'ocr_error_message' => $e->getMessage(),
+                'ocr_failed_at' => now(),
+            ]);
+        }
+
+        try {
+            $this->lm2->submitStoredImages(
+                $job->external_job_id,
+                $job->job_name ?? 'Digitisation Run',
+                $acceptedImages,
+                $job->config_overrides ?? []
+            );
+        } catch (Throwable $e) {
+            $errors[] = 'LeafMachine submission failed: ' . $e->getMessage();
+        }
+
+        if ($errors !== []) {
+            return response()->json([
+                'message' => implode(' ', $errors),
+            ], 502);
+        }
 
         $job->update([
             'progress_step' => $rejectedNames !== []
-                ? 'quality_check_partial_pass_submitted'
-                : 'quality_check_pass_submitted',
+                ? 'quality_check_partial_pass_dual_submitted'
+                : 'quality_check_pass_dual_submitted',
         ]);
 
         return response()->json([
-            'message' => 'Accepted images submitted as one batch.',
+            'message' => 'Accepted images submitted to OCR and LeafMachine as one batch.',
             'submitted_images_count' => count($acceptedImages),
             'rejected_images' => $rejectedNames,
         ]);
     }
-    
-    public function submitOCR(SubmitOCRJobRequest $request)
+
+    /**
+     * Return OCR-specific result payload for the digitalisation1 page.
+     */
+    public function ocrResults(string $externalJobId): JsonResponse
     {
-        $request->validate([
-            'images.*' => 'required|image|max:10240', // multiple images
-            'run_name' => 'nullable|string|max:255',
-        ]);
+        $job = ExtractJob::with(['images' => fn($query) => $query->orderBy('image_id')])
+            ->where('external_job_id', $externalJobId)
+            ->first();
 
-        $user = $request->user();
-        $job_id = now()->format('Ymd_His') . '_' . Str::random(4);
-        $run_name = $request->input('run_name', 'Default Run');
-
-        $uploaded_paths = [];
-        foreach ($request->file('images') as $file) {
-            $path = $file->store("digitisation/{$user->id}/{$job_id}", 'public');
-            $uploaded_paths[] = $path;
+        if (!$job) {
+            return response()->json([
+                'message' => 'Digitisation job not found.',
+            ], 404);
         }
 
-        // Create job record
-        $job = DigitisationJob::create([
-            'user_id' => $user->id,
-            'job_id' => $job_id,
-            'run_name' => $run_name,
-            'status' => 'pending',
-            'output_path' => json_encode($uploaded_paths),
+        $images = $job->images
+            ->filter(fn($image) => $image->accepted_for_submission === true && $image->iqc_decision === 'accept')
+            ->map(fn($image) => [
+                'image_id' => $image->image_id,
+                'original_filename' => $image->original_filename,
+                'stored_path' => $image->stored_path,
+                'preview_url' => route('digitisation.jobs.images.preview', [
+                    'externalJobId' => $job->external_job_id,
+                    'imageId' => $image->image_id,
+                ]),
+                'ocr_status' => $image->ocr_status ?? 'pending',
+                'llm_verified' => $image->ocr_llm_verified ?? [],
+                'editable_details' => $this->extractEditableDetails(is_array($image->ocr_llm_verified) ? $image->ocr_llm_verified : []),
+            ])
+            ->values();
+
+        return response()->json([
+            'job_id' => $job->external_job_id,
+            'ocr_status' => $job->ocr_status ?? 'pending',
+            'ocr_progress_step' => $job->ocr_progress_step,
+            'ocr_error_message' => $job->ocr_error_message,
+            'leafmachine_status' => $job->status ?? 'pending',
+            'leafmachine_progress_step' => $job->progress_step,
+            'leafmachine_started_at' => $job->started_at?->toIso8601String(),
+            'leafmachine_completed_at' => $job->completed_at?->toIso8601String(),
+            'leafmachine_failed_at' => $job->failed_at?->toIso8601String(),
+            'images' => $images,
         ]);
+    }
 
-        $python_api_url = config('services.ocr_pipeline.url'); // e.g., http://localhost:5000/process
+    public function imagePreview(string $externalJobId, int $imageId): BinaryFileResponse|JsonResponse
+    {
+        $job = ExtractJob::where('external_job_id', $externalJobId)->first();
 
-        $results = [];
-        foreach ($uploaded_paths as $path) {
-            $response = Http::attach(
-                'file', fopen(storage_path("app/public/{$path}"), 'r'), basename($path)
-            )->post($python_api_url, [
-                'job_id' => $job_id,
-            ]);
-
-            if ($response->successful()) {
-                $res = $response->json()['results'][0]; // single image
-                DigitisationResult::create([
-                    'digitisation_job_id' => $job->id,
-                    'record_index' => 0,
-                    'data' => $res,
-                ]);
-                $results[] = $res;
-            } else {
-                $job->update([
-                    'status' => 'failed',
-                    'error_message' => $response->body(),
-                ]);
-                return response()->json(['message' => 'OCR failed', 'error' => $response->body()], 500);
-            }
+        if (!$job) {
+            return response()->json([
+                'message' => 'Digitisation job not found.',
+            ], 404);
         }
 
-        $job->update([
-            'status' => 'completed',
-            'results_imported_at' => now(),
+        $image = $job->images()->where('image_id', $imageId)->first();
+        if (!$image) {
+            return response()->json([
+                'message' => 'Image not found for this job.',
+            ], 404);
+        }
+
+        if (!is_string($image->stored_path) || $image->stored_path === '') {
+            return response()->json([
+                'message' => 'Image path is not available.',
+            ], 422);
+        }
+
+        $absolutePath = $this->uploadStorage->absolutePath($image->stored_path);
+        if (!file_exists($absolutePath)) {
+            return response()->json([
+                'message' => 'Image file is missing on disk.',
+            ], 404);
+        }
+
+        return response()->file($absolutePath, [
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0',
+        ]);
+    }
+
+    public function saveImageDetails(string $externalJobId, int $imageId, Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'editable_details' => ['required', 'array'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Invalid details payload.',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $job = ExtractJob::where('external_job_id', $externalJobId)->first();
+
+        if (!$job) {
+            return response()->json([
+                'message' => 'Digitisation job not found.',
+            ], 404);
+        }
+
+        $image = $job->images()->where('image_id', $imageId)->first();
+        if (!$image) {
+            return response()->json([
+                'message' => 'Image not found for this job.',
+            ], 404);
+        }
+
+        $validated = $validator->validated();
+        $editable = $this->normalizeEditableDetails(
+            is_array($validated['editable_details'] ?? null) ? $validated['editable_details'] : []
+        );
+        $current = is_array($image->ocr_llm_verified) ? $image->ocr_llm_verified : [];
+        $current['edited_details'] = $editable;
+
+        $image->update([
+            'ocr_llm_verified' => $current,
         ]);
 
         return response()->json([
-            'job_id' => $job_id,
-            'results' => $results,
+            'message' => 'Image details saved.',
+            'image_id' => $image->image_id,
+            'editable_details' => $editable,
+            'llm_verified' => $current,
         ]);
+    }
+
+    private function normalizeEditableDetails(array $input): array
+    {
+        $normalized = [];
+
+        foreach ($input as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            $safeKey = trim($key);
+            if ($safeKey === '') {
+                continue;
+            }
+
+            $normalized[$safeKey] = $this->normalizeScalarString($value);
+        }
+
+        return $normalized;
+    }
+
+    private function extractEditableDetails(array $llmVerified): array
+    {
+        if (isset($llmVerified['edited_details']) && is_array($llmVerified['edited_details'])) {
+            return $this->normalizeEditableDetails($llmVerified['edited_details']);
+        }
+
+        $fieldValidation = [];
+        if (isset($llmVerified['field_validation']) && is_array($llmVerified['field_validation'])) {
+            $fieldValidation = $llmVerified['field_validation'];
+        }
+
+        $resolved = [];
+        foreach ($fieldValidation as $field => $payload) {
+            if (!is_string($field)) {
+                continue;
+            }
+
+            if (!is_array($payload)) {
+                continue;
+            }
+
+            $resolved[$field] = $this->resolveFieldValue($payload);
+        }
+
+        if ($resolved !== []) {
+            return $resolved;
+        }
+
+        // Fallback when no field_validation object exists.
+        $fallback = [];
+        foreach ($llmVerified as $key => $value) {
+            if (!is_string($key)) {
+                continue;
+            }
+
+            if (is_scalar($value) || is_array($value)) {
+                $fallback[$key] = $this->normalizeScalarString($value);
+            }
+        }
+
+        return $fallback;
+    }
+
+    private function resolveFieldValue(array $fieldPayload): string
+    {
+        $correct = filter_var($fieldPayload['correct'] ?? null, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        $original = $this->normalizeScalarString($fieldPayload['original'] ?? null);
+        $suggestion = $this->normalizeScalarString($fieldPayload['suggestion'] ?? null);
+
+        // Requested rule: correct=true => original, correct=false => suggestion.
+        if ($correct === true) {
+            return $original;
+        }
+
+        if ($correct === false) {
+            return $suggestion !== '' ? $suggestion : $original;
+        }
+
+        // If model omitted/invalid correct flag, prefer suggestion when present.
+        return $suggestion !== '' ? $suggestion : $original;
+    }
+
+    private function normalizeScalarString(mixed $value): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        if (is_string($value) || is_numeric($value) || is_bool($value)) {
+            return trim((string) $value);
+        }
+
+        if (is_array($value)) {
+            // Keep first scalar item when LLM returns array-like suggestions.
+            foreach ($value as $item) {
+                if (is_string($item) || is_numeric($item) || is_bool($item)) {
+                    return trim((string) $item);
+                }
+            }
+        }
+
+        return '';
     }
 }

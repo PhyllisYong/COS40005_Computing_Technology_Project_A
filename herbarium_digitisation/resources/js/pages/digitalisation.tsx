@@ -336,6 +336,7 @@ export default function Digitalisation() {
     original_filename?: string | null;
     iqc_status?: string | null;
     iqc_decision?: string | null;
+    iqc_reasons?: Array<{ code?: string | null; message?: string | null }> | null;
   };
 
   const [images, setImages] = useState<(string | null)[]>([null]);
@@ -344,6 +345,7 @@ export default function Digitalisation() {
   const [runName, setRunName] = useState('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [slotStates, setSlotStates] = useState<Record<number, SlotIqcState>>({});
+  const [slotFailureStages, setSlotFailureStages] = useState<Record<number, string>>({});
   const [currentJobId, setCurrentJobId] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(false);
   const [isSubmittingBatch, setIsSubmittingBatch] = useState(false);
@@ -371,14 +373,39 @@ export default function Digitalisation() {
   const resetIqcState = () => {
     stopPolling();
     setSlotStates({});
+    setSlotFailureStages({});
     setCurrentJobId(null);
     setIsValidating(false);
     setIsSubmittingBatch(false);
   };
 
+  const failureStageFromReasons = (reasons?: JobImageResult['iqc_reasons']) => {
+    const codes = (Array.isArray(reasons) ? reasons : [])
+      .map((reason) => (reason?.code ?? '').toLowerCase());
+
+    if (codes.includes('decode_failed')) return 'decode check';
+    if (codes.includes('resolution_hard_fail')) return 'resolution check';
+    if (codes.includes('blur_detected')) return 'blur check';
+    if (codes.includes('brisque_threshold_fail')) return 'BRISQUE check';
+    if (codes.includes('brisque_failed') || codes.includes('brisque_unavailable')) return 'BRISQUE scoring';
+
+    return 'quality checks';
+  };
+
+  const badgeLabelForFailureStage = (stage?: string) => {
+    if (!stage) return 'Rejected';
+    if (stage === 'resolution check') return 'Resolution Fail';
+    if (stage === 'blur check') return 'Blur Fail';
+    if (stage === 'BRISQUE check') return 'BRISQUE Fail';
+    if (stage === 'BRISQUE scoring') return 'BRISQUE Error';
+    if (stage === 'decode check') return 'Decode Fail';
+
+    return 'Rejected';
+  };
+
   const labelForState = (state: SlotIqcState) => {
     if (state === 'accepted') return { text: 'Clear', tone: 'success' as const };
-    if (state === 'rejected') return { text: 'Blur', tone: 'danger' as const };
+    if (state === 'rejected') return { text: badgeLabelForFailureStage(slotFailureStages[activeIndex]), tone: 'danger' as const };
     if (state === 'running' || state === 'queued') return { text: 'Checking', tone: 'neutral' as const };
     return { text: files[activeIndex] ? 'Waiting' : 'No Image', tone: 'neutral' as const };
   };
@@ -404,6 +431,7 @@ export default function Digitalisation() {
         const latestIqcStatus = ((payload.iqc_status as string | null) ?? '').toLowerCase();
         const imageResults = Array.isArray(payload.images) ? payload.images as JobImageResult[] : [];
         const nextStates: Record<number, SlotIqcState> = {};
+        const nextFailureStages: Record<number, string> = {};
 
         activeSlots.forEach((slotIndex, imageIndex) => {
           const imageResult = imageResults[imageIndex];
@@ -413,6 +441,7 @@ export default function Digitalisation() {
             nextStates[slotIndex] = 'accepted';
           } else if (decision === 'reject') {
             nextStates[slotIndex] = 'rejected';
+            nextFailureStages[slotIndex] = failureStageFromReasons(imageResult?.iqc_reasons);
           } else if (latestIqcStatus === 'running' || latestIqcStatus === 'dispatching' || latestIqcStatus === 'queued' || latestIqcStatus === 'pending') {
             nextStates[slotIndex] = 'running';
           } else {
@@ -421,23 +450,32 @@ export default function Digitalisation() {
         });
 
         setSlotStates(nextStates);
+        setSlotFailureStages(nextFailureStages);
 
         if (latestIqcStatus === 'completed' || latestIqcStatus === 'failed') {
           stopPolling();
           setIsValidating(false);
 
-          const rejectedNames = imageResults
-            .filter((img) => (img.iqc_decision ?? '').toLowerCase() === 'reject')
-            .map((img) => img.original_filename)
-            .filter((name): name is string => typeof name === 'string' && name !== '');
+          const rejectedDetails = imageResults
+            .map((img, index) => {
+              if ((img.iqc_decision ?? '').toLowerCase() !== 'reject') return null;
+
+              const name = (typeof img.original_filename === 'string' && img.original_filename !== '')
+                ? img.original_filename
+                : `Image ${index + 1}`;
+              const stage = failureStageFromReasons(img.iqc_reasons);
+
+              return `${name} (failed at ${stage})`;
+            })
+            .filter((value): value is string => value !== null);
 
           const accepted = imageResults.filter((img) => (img.iqc_decision ?? '').toLowerCase() === 'accept').length;
 
           if (accepted > 0) {
-            if (rejectedNames.length > 0) {
+            if (rejectedDetails.length > 0) {
               setStatusMsg({
                 type: 'error',
-                text: `Rejected images: ${rejectedNames.join(', ')}. Please reupload clearer images. Accepted images are ready for batch submission.`,
+                text: `Rejected images: ${rejectedDetails.join(', ')}. Accepted images are ready for batch submission.`,
               });
             } else {
               setStatusMsg({
@@ -448,8 +486,8 @@ export default function Digitalisation() {
           } else {
             setStatusMsg({
               type: 'error',
-              text: rejectedNames.length > 0
-                ? `Rejected images: ${rejectedNames.join(', ')}. Please reupload clearer images.`
+              text: rejectedDetails.length > 0
+                ? `Rejected images: ${rejectedDetails.join(', ')}.`
                 : (payload.error_message || 'All uploaded images were rejected. Please reupload clearer images.'),
             });
           }
@@ -603,7 +641,7 @@ export default function Digitalisation() {
           });
         }
 
-        router.visit('/digitalisation1');
+        router.visit(`/digitalisation1?job_id=${encodeURIComponent(currentJobId)}`);
       })
       .catch((error: unknown) => {
         setStatusMsg({

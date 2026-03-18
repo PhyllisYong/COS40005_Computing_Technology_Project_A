@@ -104,6 +104,39 @@ cd herbarium_digitisation
 php artisan queue:work --queue=iqc,default
 ```
 
+---
+
+# OCR Pipeline Microservice
+
+The OCR service runs OCR -> NER -> LLM verification and sends async callbacks to Laravel.
+
+### 1. Go to the OCR pipeline directory
+```
+cd digitisation_pipeline
+```
+
+### 2. Create and activate a virtual environment
+```
+python -m venv .ocr-venv
+.ocr-venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
+```
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+### 4. Go to the app directory
+```
+cd app
+```
+
+### 5. Run the OCR service
+```
+python -m uvicorn app:app --reload --host 0.0.0.0 --port 8002
+```
+
 ## Database Setup
 
 1. `php artisan migrate` creates the database schema

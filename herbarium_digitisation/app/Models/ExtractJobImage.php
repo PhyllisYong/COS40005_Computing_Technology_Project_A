@@ -27,6 +27,11 @@ class ExtractJobImage extends Model
         'iqc_payload',
         'iqc_checked_at',
         'accepted_for_submission',
+        'ocr_status',
+        'ocr_payload',
+        'ocr_text',
+        'ocr_llm_verified',
+        'ocr_processed_at',
     ];
 
     protected $casts = [
@@ -35,6 +40,9 @@ class ExtractJobImage extends Model
         'iqc_payload' => 'array',
         'iqc_checked_at' => 'datetime',
         'accepted_for_submission' => 'boolean',
+        'ocr_payload' => 'array',
+        'ocr_llm_verified' => 'array',
+        'ocr_processed_at' => 'datetime',
     ];
 
     public function job(): BelongsTo

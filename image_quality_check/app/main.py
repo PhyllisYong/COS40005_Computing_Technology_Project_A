@@ -5,13 +5,15 @@ import io
 import json
 import logging
 import os
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import cv2
 import httpx
 import numpy as np
-from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, UploadFile
+import inspect
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from PIL import Image, ImageOps
 from dotenv import load_dotenv
 
@@ -23,6 +25,39 @@ logging.basicConfig(
 )
 logger = logging.getLogger("iqc-service")
 
+# Compatibility shim for image-quality using deprecated skimage rescale(multichannel=...).
+try:
+    import scipy
+
+    if not hasattr(scipy, "ndarray"):
+        scipy.ndarray = np.ndarray
+
+    from skimage import transform as sk_transform
+    from skimage import color as sk_color
+
+    if "multichannel" not in inspect.signature(sk_transform.rescale).parameters:
+        _original_rescale = sk_transform.rescale
+
+        def _rescale_compat(*args: Any, **kwargs: Any) -> Any:
+            if "multichannel" in kwargs and "channel_axis" not in kwargs:
+                multichannel = bool(kwargs.pop("multichannel"))
+                kwargs["channel_axis"] = -1 if multichannel else None
+            return _original_rescale(*args, **kwargs)
+
+        sk_transform.rescale = _rescale_compat
+
+    _original_rgb2gray = sk_color.rgb2gray
+
+    def _rgb2gray_compat(image: Any, *args: Any, **kwargs: Any) -> Any:
+        array = np.asarray(image)
+        if array.ndim == 2:
+            return array
+        return _original_rgb2gray(image, *args, **kwargs)
+
+    sk_color.rgb2gray = _rgb2gray_compat
+except Exception:
+    pass
+
 try:
     from imquality import brisque
 except Exception:  # pragma: no cover - fallback path when BRISQUE package unavailable
@@ -33,9 +68,7 @@ app = FastAPI(title="Image Quality Check Service", version="0.1.0")
 EXIF_ORIENTATION_TAG = 274
 ROTATION_BY_EXIF = {1: 0, 3: 180, 6: 270, 8: 90}
 
-API_KEY = os.getenv("IQC_API_KEY", "")
 CALLBACK_URL = os.getenv("IQC_CALLBACK_URL", "")
-CALLBACK_TOKEN = os.getenv("IQC_CALLBACK_TOKEN", "")
 CALLBACK_TIMEOUT_SECONDS = float(os.getenv("IQC_CALLBACK_TIMEOUT_SECONDS", "30"))
 CALLBACK_MAX_RETRIES = int(os.getenv("IQC_CALLBACK_MAX_RETRIES", "3"))
 CALLBACK_RETRY_DELAY_SECONDS = float(os.getenv("IQC_CALLBACK_RETRY_DELAY_SECONDS", "1.5"))
@@ -47,6 +80,8 @@ HARD_MIN_HEIGHT = int(os.getenv("IQC_HARD_MIN_HEIGHT", "700"))
 MAX_FILE_BYTES = int(os.getenv("IQC_MAX_FILE_BYTES", str(50 * 1024 * 1024)))
 BLUR_THRESHOLD = float(os.getenv("IQC_LAPLACIAN_THRESHOLD", "120"))
 BRISQUE_THRESHOLD = float(os.getenv("IQC_BRISQUE_THRESHOLD", "40"))
+BRISQUE_MAX_DIM = int(os.getenv("IQC_BRISQUE_MAX_DIM", "1024"))
+BRISQUE_SKIP_ON_REJECT = os.getenv("IQC_BRISQUE_SKIP_ON_REJECT", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 
 @dataclass
@@ -67,12 +102,7 @@ async def upload_job(
     job_id: str = Form(...),
     image_manifest: str | None = Form(default=None),
     images: list[UploadFile] = File(...),
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> dict[str, Any]:
-    if not API_KEY or x_api_key != API_KEY:
-        logger.warning("Unauthorized IQC submission rejected for job_id=%s", job_id)
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
     manifest = _parse_manifest(image_manifest)
 
     buffered: list[InMemoryImage] = []
@@ -119,6 +149,24 @@ def _parse_manifest(raw_manifest: str | None) -> list[dict[str, Any]]:
         return []
 
     return [item for item in data if isinstance(item, dict)]
+
+
+def _prepare_brisque_image(image: Image.Image) -> Image.Image:
+    if BRISQUE_MAX_DIM <= 0:
+        return image
+
+    width, height = image.size
+    longest_side = max(width, height)
+
+    if longest_side <= BRISQUE_MAX_DIM:
+        return image
+
+    scale = BRISQUE_MAX_DIM / float(longest_side)
+    resized = (
+        max(1, int(round(width * scale))),
+        max(1, int(round(height * scale))),
+    )
+    return image.resize(resized, Image.Resampling.LANCZOS)
 
 
 async def process_and_callback(job_id: str, images: list[InMemoryImage]) -> None:
@@ -204,7 +252,8 @@ def evaluate_image(image: InMemoryImage) -> dict[str, Any]:
             "message": f"Image is below soft resolution target ({SOFT_MIN_WIDTH}x{SOFT_MIN_HEIGHT}).",
         })
 
-    gray = cv2.cvtColor(np.array(normalized.convert("RGB")), cv2.COLOR_RGB2GRAY)
+    rgb_image = normalized.convert("RGB")
+    gray = cv2.cvtColor(np.array(rgb_image), cv2.COLOR_RGB2GRAY)
     laplacian_var = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     metrics["laplacian_variance"] = laplacian_var
 
@@ -217,14 +266,22 @@ def evaluate_image(image: InMemoryImage) -> dict[str, Any]:
 
     brisque_score = None
     if brisque is not None:
-        try:
-            brisque_score = float(brisque.score(normalized.convert("RGB")))
-            metrics["brisque"] = brisque_score
-        except Exception:
-            reasons.append({
-                "code": "brisque_failed",
-                "message": "BRISQUE score could not be computed.",
-            })
+        if BRISQUE_SKIP_ON_REJECT and decision == "reject":
+            metrics["brisque_skipped"] = True
+        else:
+            brisque_input = _prepare_brisque_image(rgb_image)
+            metrics["brisque_input_width"] = brisque_input.size[0]
+            metrics["brisque_input_height"] = brisque_input.size[1]
+            try:
+                start = time.perf_counter()
+                brisque_score = float(brisque.score(brisque_input))
+                metrics["brisque"] = brisque_score
+                metrics["brisque_ms"] = round((time.perf_counter() - start) * 1000, 2)
+            except Exception:
+                reasons.append({
+                    "code": "brisque_failed",
+                    "message": "BRISQUE score could not be computed.",
+                })
     else:
         reasons.append({
             "code": "brisque_unavailable",
@@ -251,13 +308,12 @@ def evaluate_image(image: InMemoryImage) -> dict[str, Any]:
 
 
 async def post_callback(job_id: str, payload: dict[str, Any]) -> None:
-    if not CALLBACK_URL or not CALLBACK_TOKEN:
+    if not CALLBACK_URL:
         logger.warning("Callback skipped for job_id=%s because callback env is missing", job_id)
         return
 
     url = f"{CALLBACK_URL.rstrip('/')}/{job_id}/status"
     headers = {
-        "Authorization": f"Bearer {CALLBACK_TOKEN}",
         "Content-Type": "application/json",
     }
 
